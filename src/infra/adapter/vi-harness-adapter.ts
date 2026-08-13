@@ -107,9 +107,10 @@ export class ViHarness {
 
     // 2. Translate PiBenchmarkTask -> Vi Goal & Constraints
     const maxCostUSD = task.maxCostUSD ?? 10.0;
-    const maxTokens = task.maxTokens ?? 100000;
-    const maxIterations = task.maxIterations ?? 10;
-    const maxDurationMs = task.maxDurationMs ?? 300000;
+    const maxTokens = task.maxTokens ?? task.tokenBudget ?? 100000;
+    const maxIterations = task.maxIterations ?? task.maxTurns ?? task.turnLimit ?? 10;
+    const maxDurationMs = task.maxDurationMs ?? task.timeoutMs ?? 300000;
+    const repositoryPath = task.repositoryPath ?? task.workingDirectory ?? task.repoPath ?? '';
 
     const goal: Goal = {
       id: (task.id ? (task.id as unknown as GoalId) : this.idFactory.create<'Goal'>()),
@@ -129,7 +130,7 @@ export class ViHarness {
         taskName: task.name ?? task.id,
         category: task.category ?? 'BENCHMARK',
         riskLevel: task.riskLevel ?? 'LOW',
-        repositoryPath: task.repositoryPath ?? task.workingDirectory ?? '',
+        repositoryPath,
         requiredTools: task.requiredTools ?? [],
         maxTokens,
       },
@@ -269,6 +270,11 @@ export class ViHarness {
 
   /** Alias for runTask */
   async execute(task: PiBenchmarkTask): Promise<PiBenchmarkResult> {
+    return this.runTask(task);
+  }
+
+  /** Alias for runTask */
+  async run(task: PiBenchmarkTask): Promise<PiBenchmarkResult> {
     return this.runTask(task);
   }
 }

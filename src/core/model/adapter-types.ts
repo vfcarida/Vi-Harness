@@ -35,18 +35,23 @@ export interface PiBenchmarkTask {
   /** Target repository working directory path */
   readonly repositoryPath?: string;
   readonly workingDirectory?: string;
+  readonly repoPath?: string;
 
   /** Cost constraint in USD */
   readonly maxCostUSD?: number;
 
   /** Total token budget limit */
   readonly maxTokens?: number;
+  readonly tokenBudget?: number;
 
   /** Maximum iterations / turns allowed */
   readonly maxIterations?: number;
+  readonly maxTurns?: number;
+  readonly turnLimit?: number;
 
   /** Task wall-clock timeout in milliseconds */
   readonly maxDurationMs?: number;
+  readonly timeoutMs?: number;
 
   /** List of tool names required for task */
   readonly requiredTools?: ReadonlyArray<string>;

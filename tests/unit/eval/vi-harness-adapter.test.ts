@@ -6,6 +6,7 @@
  * - Exposes success, finalState, changedFiles, finalDiff, tests, iterations, modelCalls, tokens, estimatedCost, duration, terminationReason
  * - Strictly hides internal Vi-Harness domain objects behind the adapter boundary
  * - Acts as a drop-in replacement for PiHarness in coding-agent benchmarks
+ * - Preserves Vi runtime architecture without internal mutations
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -13,6 +14,11 @@ import {
   ScriptedModelProvider,
   UuidV7IdFactory,
   TestClock,
+  DefaultEvidenceStore,
+  DefaultVerificationEngine,
+  DefaultGitManager,
+  EvidenceType,
+  EvidenceOutcome,
   type PiBenchmarkTask,
 } from '../../../src/index.js';
 
@@ -56,7 +62,7 @@ describe('ViHarness Pi-Replacement Compatibility Adapter Contract', () => {
 
     const result = await harness.runTask(benchmarkTask);
 
-    // Verify mandatory benchmark result fields
+    // Verify all 11 mandatory benchmark result fields
     expect(result).toBeDefined();
     expect(result.taskId).toBe('task-bench-101');
     expect(typeof result.success).toBe('boolean');
@@ -121,7 +127,7 @@ describe('ViHarness Pi-Replacement Compatibility Adapter Contract', () => {
     expect(result.finalDiff).toContain('src/auth/login.ts');
   });
 
-  it('3. Alias Methods Support: Supports executeTask and execute aliases for benchmark runners', async () => {
+  it('3. Alias Methods Support: Supports run, runTask, executeTask, and execute aliases', async () => {
     const idFactory = new UuidV7IdFactory();
     const clock = new TestClock(new Date('2026-08-13T12:00:00Z'));
 
@@ -138,10 +144,12 @@ describe('ViHarness Pi-Replacement Compatibility Adapter Contract', () => {
     const res1 = await harness.runTask(task);
     const res2 = await harness.executeTask(task);
     const res3 = await harness.execute(task);
+    const res4 = await harness.run(task);
 
     expect(res1.taskId).toBe('task-alias-test');
     expect(res2.taskId).toBe('task-alias-test');
     expect(res3.taskId).toBe('task-alias-test');
+    expect(res4.taskId).toBe('task-alias-test');
   });
 
   it('4. Information Hiding Boundary: Does NOT leak internal Vi state handles in PiBenchmarkResult', async () => {
@@ -158,13 +166,163 @@ describe('ViHarness Pi-Replacement Compatibility Adapter Contract', () => {
       description: 'Ensure internal Vi state handles are hidden',
     };
 
-    const result = await harness.runTask(task) as any;
+    const result = await harness.runTask(task) as Record<string, unknown>;
 
     // Verify internal state machine / runtime / context graph handles are NOT exposed
-    expect(result.stateMachine).toBeUndefined();
-    expect(result.contextCompiler).toBeUndefined();
-    expect(result.eventStore).toBeUndefined();
-    expect(result.evidenceStore).toBeUndefined();
-    expect(result.policyEngine).toBeUndefined();
+    expect(result['stateMachine']).toBeUndefined();
+    expect(result['contextCompiler']).toBeUndefined();
+    expect(result['eventStore']).toBeUndefined();
+    expect(result['evidenceStore']).toBeUndefined();
+    expect(result['policyEngine']).toBeUndefined();
+    expect(result['activeExecutions']).toBeUndefined();
+  });
+
+  it('5. Task Aliases & Constraints Translation: Accurately maps benchmark parameters to Vi Goal', async () => {
+    const idFactory = new UuidV7IdFactory();
+    const clock = new TestClock(new Date('2026-08-13T12:00:00Z'));
+
+    const harness = new ViHarness({
+      idFactory,
+      clock,
+    });
+
+    const taskWithAliases: PiBenchmarkTask = {
+      id: 'task-alias-constraints',
+      name: 'Refactor Auth Module',
+      description: 'Migrate session tokens to JWT',
+      repoPath: '/workspace/project-alpha',
+      timeoutMs: 45000,
+      tokenBudget: 30000,
+      maxTurns: 8,
+      maxCostUSD: 1.5,
+      category: 'SECURITY',
+      riskLevel: 'MEDIUM',
+    };
+
+    const result = await harness.run(taskWithAliases);
+
+    expect(result.taskId).toBe('task-alias-constraints');
+    expect(result.duration).toBeGreaterThan(0);
+    expect(result.iterations).toBeGreaterThanOrEqual(1);
+  });
+
+  it('6. Git Manager Integration: Captures baseline, agent delta, and diff when GitManager is provided', async () => {
+    const idFactory = new UuidV7IdFactory();
+    const clock = new TestClock(new Date('2026-08-13T12:00:00Z'));
+    const gitManager = new DefaultGitManager();
+
+    // Pre-seed some baseline files
+    gitManager.markFileOwner('src/index.ts', 'agent');
+    gitManager.markFileOwner('src/utils.ts', 'agent');
+
+    const harness = new ViHarness({
+      gitManager,
+      idFactory,
+      clock,
+    });
+
+    const task: PiBenchmarkTask = {
+      id: 'task-git-integration',
+      description: 'Test git delta extraction in adapter',
+    };
+
+    const result = await harness.runTask(task);
+
+    expect(result.changedFiles).toContain('src/index.ts');
+    expect(result.changedFiles).toContain('src/utils.ts');
+    expect(typeof result.finalDiff).toBe('string');
+  });
+
+  it('7. Verification Evidence Aggregation: Correctly aggregates test pass rates and counts', async () => {
+    const idFactory = new UuidV7IdFactory();
+    const clock = new TestClock(new Date('2026-08-13T12:00:00Z'));
+    const evidenceStore = new DefaultEvidenceStore();
+    const verificationEngine = new DefaultVerificationEngine({ evidenceStore, idFactory, clock });
+
+    const harness = new ViHarness({
+      evidenceStore,
+      verificationEngine,
+      idFactory,
+      clock,
+    });
+
+    const task: PiBenchmarkTask = {
+      id: 'task-verification-test',
+      description: 'Run verification tests and verify adapter metrics',
+    };
+
+    const result = await harness.runTask(task);
+
+    expect(result.tests).toBeDefined();
+    expect(typeof result.tests.total).toBe('number');
+    expect(typeof result.tests.passed).toBe('number');
+    expect(typeof result.tests.failed).toBe('number');
+    expect(typeof result.tests.passRate).toBe('number');
+    expect(result.tests.passRate).toBeGreaterThanOrEqual(0);
+    expect(result.tests.passRate).toBeLessThanOrEqual(1);
+  });
+
+  it('8. Multi-Step Token and Cost Calculation: Aggregates tokens and USD cost across iterations', async () => {
+    const idFactory = new UuidV7IdFactory();
+    const clock = new TestClock(new Date('2026-08-13T12:00:00Z'));
+
+    const scriptedProvider = new ScriptedModelProvider({
+      providerId: 'token-cost-provider',
+      steps: [
+        {
+          content: 'Step 1: Inspect repository files',
+          toolCalls: [{ id: 'c1', name: 'read_file', input: { path: 'package.json' } }],
+          tokenUsage: { inputTokens: 500, outputTokens: 100, totalTokens: 600 },
+        },
+        {
+          content: 'Step 2: Apply code fix',
+          toolCalls: [{ id: 'c2', name: 'write_file', input: { path: 'src/app.ts', content: 'export const ok = true;' } }],
+          tokenUsage: { inputTokens: 800, outputTokens: 150, totalTokens: 950 },
+        },
+      ],
+    });
+
+    const harness = new ViHarness({
+      primaryProvider: scriptedProvider,
+      idFactory,
+      clock,
+    });
+
+    const task: PiBenchmarkTask = {
+      id: 'task-tokens-cost',
+      description: 'Measure multi-step token and cost calculation',
+    };
+
+    const result = await harness.runTask(task);
+
+    expect(result.tokens.promptTokens).toBeGreaterThan(0);
+    expect(result.tokens.completionTokens).toBeGreaterThan(0);
+    expect(result.tokens.totalTokens).toBe(result.tokens.promptTokens + result.tokens.completionTokens);
+    expect(result.modelCalls).toBeGreaterThan(0);
+    expect(typeof result.estimatedCost).toBe('number');
+  });
+
+  it('9. Non-Invasive Architecture Guarantee: Preserves Vi state machine without modifying internal runtime', async () => {
+    const idFactory = new UuidV7IdFactory();
+    const clock = new TestClock(new Date('2026-08-13T12:00:00Z'));
+
+    const harness = new ViHarness({
+      idFactory,
+      clock,
+      harnessVersion: '0.1.0-custom-bench',
+    });
+
+    expect(harness.harnessVersion).toBe('0.1.0-custom-bench');
+
+    const task: PiBenchmarkTask = {
+      id: 'task-architecture-check',
+      description: 'Ensure deterministic state machine execution is untouched',
+    };
+
+    const result = await harness.runTask(task);
+
+    expect(result.success).toBeDefined();
+    expect(result.finalState).toBeDefined();
+    expect(result.terminationReason).toBeDefined();
   });
 });

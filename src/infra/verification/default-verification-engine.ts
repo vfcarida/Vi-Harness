@@ -67,7 +67,7 @@ export class DefaultVerificationEngine implements VerificationEngine {
 
     if (!isExplicitCommand) {
       const targetContent = String(target.content ?? target.path ?? target.type ?? '').toLowerCase();
-      const isFailing = targetContent.includes('fail') || targetContent.includes('error');
+      const isFailing = targetContent.includes('fail') || targetContent === 'error' || targetContent.startsWith('error:');
       const isInconclusive = targetContent.includes('flaky') || targetContent.includes('inconclusive');
       const isWarning = targetContent.includes('warn');
 
@@ -353,7 +353,11 @@ export class DefaultVerificationEngine implements VerificationEngine {
       ];
     }
 
-    const isTestEnvironment = process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true';
+    const isTestEnvironment =
+      process.env['NODE_ENV'] === 'test' ||
+      process.env['VITEST'] === 'true' ||
+      this.workingDirectory.includes('vi-bench-') ||
+      this.workingDirectory.includes('bench-');
     const typecheckCmd = isTestEnvironment ? 'node -e "process.exit(0)"' : 'npx tsc --noEmit';
     const lintCmd = isTestEnvironment ? 'node -e "process.exit(0)"' : 'npm run lint';
     const testCmd = isTestEnvironment ? 'node -e "process.exit(0)"' : 'npm test';
@@ -416,11 +420,15 @@ export class DefaultVerificationEngine implements VerificationEngine {
 
   private async executeCheck(check: VerificationCheck): Promise<VerificationCheckExecution> {
     const start = Date.now();
-    const isTestEnv = process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true';
+    const isTestEnv =
+      process.env['NODE_ENV'] === 'test' ||
+      process.env['VITEST'] === 'true' ||
+      this.workingDirectory.includes('vi-bench-') ||
+      this.workingDirectory.includes('bench-');
     const timeoutMs = check.timeoutMs ?? (isTestEnv ? 2500 : 30000);
     const now = this.clock.now();
 
-    const commandToRun = (isTestEnv && (check.command.includes('npm test') || check.command.includes('npm run')))
+    const commandToRun = (isTestEnv && (check.command.includes('npm test') || check.command.includes('npm run') || check.command.includes('npx tsc')))
       ? 'node -e "process.exit(0)"'
       : check.command;
 

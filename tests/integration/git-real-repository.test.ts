@@ -16,7 +16,7 @@ import type { TaskId } from '../../src/index.js';
 
 const execFileAsync = promisify(execFile);
 
-describe('Real Repository Git & Checkpoint Integration Suite', () => {
+describe('Real Repository Git & Checkpoint Integration Suite', { timeout: 30000 }, () => {
   let tempRepoDir: string;
   let gitManager: RealGitManager;
   let rollbackManager: DefaultRollbackManager;
@@ -58,10 +58,21 @@ describe('Real Repository Git & Checkpoint Integration Suite', () => {
     checkpointStore = new DefaultCheckpointStore({ idFactory, clock });
   });
 
-  afterEach(() => {
-    // Cleanup temporary directory
+  afterEach(async () => {
+    // Cleanup temporary directory safely on Windows
     if (tempRepoDir && fs.existsSync(tempRepoDir)) {
-      fs.rmSync(tempRepoDir, { recursive: true, force: true });
+      try {
+        fs.rmSync(tempRepoDir, { recursive: true, force: true });
+      } catch {
+        await new Promise((r) => setTimeout(r, 50));
+        try {
+          if (fs.existsSync(tempRepoDir)) {
+            fs.rmSync(tempRepoDir, { recursive: true, force: true });
+          }
+        } catch {
+          // ignore
+        }
+      }
     }
   });
 

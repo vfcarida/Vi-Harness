@@ -133,6 +133,14 @@ export { StateCorruptionValidator } from './persistence/state-corruption-validat
 // Evaluation & Resilience
 export { FaultInjector, FaultMode } from './resilience/fault-injector.js';
 export { BASELINE_SCENARIOS, CANONICAL_BASELINE_SUITE } from './eval/baseline-scenarios.js';
+export { StatisticalCalculator } from './eval/statistical-calculator.js';
+export { WorkspaceIsolationManager } from './eval/workspace-isolation.js';
+export type { WorkspaceIsolationOptions, IsolatedWorkspace } from './eval/workspace-isolation.js';
+export { ViHarnessAdapterRunner } from './eval/vi-harness-adapter-runner.js';
+export type { ViHarnessAdapterRunnerOptions } from './eval/vi-harness-adapter-runner.js';
+export { PiHarnessAdapterRunner } from './eval/pi-harness-adapter-runner.js';
+export type { PiHarnessAdapterRunnerOptions } from './eval/pi-harness-adapter-runner.js';
+export { MarkdownReportGenerator } from './eval/markdown-report-generator.js';
 export { DefaultBenchmarkRunner } from './eval/default-benchmark-runner.js';
 export type { DefaultBenchmarkRunnerOptions } from './eval/default-benchmark-runner.js';
 

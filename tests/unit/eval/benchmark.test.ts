@@ -120,7 +120,7 @@ describe('Benchmark and Evaluation Framework', () => {
     expect(report.variance.stdDevSuccessRate).toBeDefined();
     expect(report.variance.stdDevTotalTokens).toBeGreaterThanOrEqual(0);
     expect(report.variance.stdDevTotalCostUSD).toBeGreaterThanOrEqual(0);
-  });
+  }, 30000);
 
   it('5. Machine-Readable Output: Serializes full benchmark report into valid JSON', async () => {
     const report = await runner.runSuite(CANONICAL_BASELINE_SUITE, options);
@@ -133,5 +133,5 @@ describe('Benchmark and Evaluation Framework', () => {
     expect(parsed.suiteId).toBe(CANONICAL_BASELINE_SUITE.suiteId);
     expect(parsed.results).toHaveLength(7);
     expect(parsed.aggregatedMetrics.overallSuccessRate).toBe(1.0);
-  });
+  }, 30000);
 });

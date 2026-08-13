@@ -21,6 +21,7 @@ export interface BenchmarkEnvironment {
   readonly isolatedWorkspace: boolean;
   readonly containerized: boolean;
   readonly variables: Readonly<Record<string, string>>;
+  readonly workspaceRoot?: string;
 }
 
 export interface ModelConfiguration {
@@ -28,6 +29,7 @@ export interface ModelConfiguration {
   readonly modelId: string;
   readonly temperature: number;
   readonly maxTokens?: number;
+  readonly modelVersion?: string;
 }
 
 export interface HarnessConfiguration {
@@ -87,9 +89,11 @@ export enum BaselineScenarioCategory {
 export interface BenchmarkTask {
   readonly id: string;
   readonly name: string;
-  readonly category: BaselineScenarioCategory;
+  readonly category: BaselineScenarioCategory | string;
   readonly description: string;
   readonly repositoryPath: string;
+  readonly initialCommit?: string;
+  readonly requiredTools?: ReadonlyArray<string>;
   readonly successCriteria: SuccessCriteria;
   readonly evidenceCriteria: EvidenceCriteria;
   readonly regressionCriteria: RegressionCriteria;
@@ -102,6 +106,53 @@ export interface TaskSuite {
   readonly name: string;
   readonly description: string;
   readonly tasks: ReadonlyArray<BenchmarkTask>;
+}
+
+// ---------------------------------------------------------------------------
+// Statistical Distributions
+// ---------------------------------------------------------------------------
+
+export interface StatisticalDistribution {
+  readonly mean: number;
+  readonly median: number;
+  readonly p95: number;
+  readonly min: number;
+  readonly max: number;
+  readonly stdDev: number;
+  readonly samples: ReadonlyArray<number>;
+}
+
+// ---------------------------------------------------------------------------
+// Benchmark Run (Single Execution Record)
+// ---------------------------------------------------------------------------
+
+export interface BenchmarkRun {
+  readonly runId: string;
+  readonly harness: string;
+  readonly harnessVersion: string;
+  readonly model: string;
+  readonly modelVersion: string;
+  readonly repositoryCommit: string;
+  readonly taskId: string;
+  readonly runIndex: number;
+  readonly seed: string;
+  readonly startedAt: Date;
+  readonly completedAt: Date;
+  readonly success: boolean;
+  readonly testsPassed: number;
+  readonly totalTests: number;
+  readonly testPassRate: number;
+  readonly regressions: number;
+  readonly iterations: number;
+  readonly toolCalls: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly totalTokens: number;
+  readonly estimatedCost: number;
+  readonly latency: number;
+  readonly terminationReason: string;
+  readonly workspacePath: string;
+  readonly error?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,20 +222,74 @@ export interface ModelEfficiencyMetrics {
 // ---------------------------------------------------------------------------
 
 export interface BenchmarkResult {
-  readonly taskId: TaskId;
-  readonly metadata: BenchmarkMetadata;
-  readonly correctness: CorrectnessMetrics;
-  readonly efficiency: EfficiencyMetrics;
-  readonly contextEfficiency: ContextEfficiencyMetrics;
-  readonly reliability: ReliabilityMetrics;
-  readonly modelEfficiency: ModelEfficiencyMetrics;
-  readonly executionTimeMs: number;
+  readonly taskId: TaskId | string;
+  readonly harness: string;
+  readonly harnessVersion: string;
+  readonly model: string;
+  readonly modelVersion: string;
+  readonly totalRuns: number;
+  readonly successfulRuns: number;
+  readonly successRate: number;
+  readonly costDistribution: StatisticalDistribution;
+  readonly iterationDistribution: StatisticalDistribution;
+  readonly tokenDistribution: {
+    readonly inputTokens: StatisticalDistribution;
+    readonly outputTokens: StatisticalDistribution;
+    readonly totalTokens: StatisticalDistribution;
+  };
+  readonly latencyDistribution: StatisticalDistribution;
+  readonly testPassRateDistribution: StatisticalDistribution;
+  readonly regressionsDistribution: StatisticalDistribution;
+  readonly runs: ReadonlyArray<BenchmarkRun>;
+  readonly metadata?: BenchmarkMetadata;
+  readonly correctness?: CorrectnessMetrics;
+  readonly efficiency?: EfficiencyMetrics;
+  readonly contextEfficiency?: ContextEfficiencyMetrics;
+  readonly reliability?: ReliabilityMetrics;
+  readonly modelEfficiency?: ModelEfficiencyMetrics;
+  readonly executionTimeMs?: number;
+}
+
+export interface BenchmarkTaskComparison {
+  readonly taskId: string;
+  readonly taskName: string;
+  readonly category: string;
+  readonly harnessResults: Record<string, BenchmarkResult>;
+}
+
+export interface HarnessSuiteSummary {
+  readonly harness: string;
+  readonly harnessVersion: string;
+  readonly totalRuns: number;
+  readonly overallSuccessRate: number;
+  readonly costDistribution: StatisticalDistribution;
+  readonly iterationDistribution: StatisticalDistribution;
+  readonly tokenDistribution: {
+    readonly inputTokens: StatisticalDistribution;
+    readonly outputTokens: StatisticalDistribution;
+    readonly totalTokens: StatisticalDistribution;
+  };
+  readonly latencyDistribution: StatisticalDistribution;
+  readonly testPassRateDistribution: StatisticalDistribution;
+  readonly regressionsDistribution: StatisticalDistribution;
 }
 
 export interface VarianceMetrics {
   readonly stdDevSuccessRate: number;
   readonly stdDevTotalTokens: number;
   readonly stdDevTotalCostUSD: number;
+}
+
+export interface BenchmarkSuiteResult {
+  readonly suiteId: string;
+  readonly suiteName: string;
+  readonly seed: string;
+  readonly runsPerTask: number;
+  readonly modelConfig: ModelConfiguration;
+  readonly environment: BenchmarkEnvironment;
+  readonly taskComparisons: ReadonlyArray<BenchmarkTaskComparison>;
+  readonly harnessSummaries: Record<string, HarnessSuiteSummary>;
+  readonly generatedAt: Date;
 }
 
 export interface BenchmarkReport {
