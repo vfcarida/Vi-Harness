@@ -14,6 +14,7 @@ import type {
   MemoryQuery,
   CreateMemoryRecordParams,
   MemoryTier,
+  MemoryConflict,
 } from '../model/memory-types.js';
 
 // ---------------------------------------------------------------------------
@@ -70,6 +71,12 @@ export interface MemoryStore {
 
   /** Delete a memory record. */
   delete(id: MemoryId): Promise<boolean>;
+
+  /** Get all active memory conflicts. */
+  getConflicts(): Promise<ReadonlyArray<MemoryConflict>>;
+
+  /** Resolve a memory conflict by keeping winning record and invalidating losing record. */
+  resolveConflict(conflictId: string, winningRecordId: MemoryId): Promise<MemoryRecord>;
 
   /** Clear all memories. */
   clear(): Promise<void>;

@@ -1,49 +1,71 @@
 /**
  * Memory Lifecycle Manager.
  *
- * Implements promotion rules and invalidation:
- * - Promotion: Short-term / Episodic memory is promoted to Semantic or Procedural when:
- *   1. Recurrence count >= 2
- *   2. Importance >= 0.8
- *   3. Success count >= 2
- *   4. Explicit user decision or architectural significance
- * - Invalidation & Staleness:
- *   - Stale: Marked STALE when architecture changes or system facts are superseded.
- *   - Invalidated: Marked INVALIDATED when contradicting evidence is proven.
- *   - Expired: Marked EXPIRED when TTL expires.
+ * Implements promotion rules and explicit status transitions:
+ * CANDIDATE -> ACTIVE -> STALE / INVALIDATED -> ARCHIVED
+ *
+ * A memory is not active simply because a tool returned data.
+ * Promotion to ACTIVE considers:
+ * - importance >= 0.7
+ * - recurrence count >= 2
+ * - explicit user decision
+ * - architecture significance
+ * - successful reuse
+ * - failure prevention
  */
 import type { MemoryRecord } from '../../core/model/memory-types.js';
-import { MemoryStatus, MemoryTier } from '../../core/model/memory-types.js';
+import { MemoryStatus, MemoryTier, MemoryType } from '../../core/model/memory-types.js';
 
 export class MemoryLifecycle {
   /**
-   * Evaluate whether a MemoryRecord qualifies for promotion to long-term tier.
+   * Evaluate whether a MemoryRecord (in CANDIDATE status or SHORT_TERM tier)
+   * qualifies for promotion to ACTIVE status and/or long-term tier.
    */
   static shouldPromote(record: MemoryRecord): boolean {
-    if (record.status === MemoryStatus.STALE || record.status === MemoryStatus.INVALIDATED) {
+    if (
+      record.status === MemoryStatus.STALE ||
+      record.status === MemoryStatus.INVALIDATED ||
+      record.status === MemoryStatus.ARCHIVED
+    ) {
       return false;
     }
 
-    if (record.tier === MemoryTier.SEMANTIC || record.tier === MemoryTier.PROCEDURAL) {
-      return false; // Already promoted
-    }
-
-    // Rule 1: High importance & recurrence
-    if (record.importance >= 0.8 && record.recurrenceCount >= 2) {
-      return true;
-    }
-
-    // Rule 2: Successful reuse history
-    if (record.successCount >= 2 && record.confidence >= 0.8) {
-      return true;
-    }
-
-    // Rule 3: Explicit user decision or failure avoidance tag
+    // 1. Explicit user decision
     if (
+      record.source === 'user' ||
+      record.source === 'human' ||
       record.tags.includes('user_decision') ||
-      record.tags.includes('failure_avoidance') ||
-      record.tags.includes('architecture')
+      record.tags.includes('explicit_user')
     ) {
+      return true;
+    }
+
+    // 2. Architecture significance
+    if (
+      record.type === MemoryType.DECISION ||
+      record.type === MemoryType.PATTERN ||
+      record.tags.includes('architecture') ||
+      record.tags.includes('critical_decision')
+    ) {
+      return true;
+    }
+
+    // 3. Failure prevention
+    if (
+      record.type === MemoryType.FAILURE_AVOIDANCE ||
+      record.tags.includes('failure_avoidance') ||
+      record.tags.includes('failure_prevention')
+    ) {
+      return true;
+    }
+
+    // 4. High importance & recurrence
+    if (record.importance >= 0.7 && record.recurrenceCount >= 2) {
+      return true;
+    }
+
+    // 5. Successful reuse history
+    if (record.successCount >= 1 || record.accessCount >= 2) {
       return true;
     }
 

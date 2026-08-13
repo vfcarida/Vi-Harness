@@ -1,17 +1,16 @@
 /**
  * Memory Subsystem Domain Types.
  *
- * "Memory is not a second transcript."
- * "Memory is retrieved, not injected wholesale."
+ * "Memory is not conversation history. Memory is durable information."
  *
- * Defines memory tiers (Short-Term, Episodic, Semantic, Procedural),
- * record types, lifecycle statuses (Active, Promoted, Stale, Invalidated, Expired),
- * promotion rules, and scoring structures.
+ * Defines memory tiers, record types, explicit lifecycle statuses
+ * (CANDIDATE, ACTIVE, STALE, INVALIDATED, ARCHIVED), provenance metadata,
+ * conflict representation, and query interfaces.
  */
 import type { MemoryId } from '../types/identifiers.js';
 
 // ---------------------------------------------------------------------------
-// Memory Tiers
+// Memory Tiers & Types
 // ---------------------------------------------------------------------------
 
 export enum MemoryTier {
@@ -20,10 +19,6 @@ export enum MemoryTier {
   SEMANTIC = 'SEMANTIC',
   PROCEDURAL = 'PROCEDURAL',
 }
-
-// ---------------------------------------------------------------------------
-// Memory Record Types
-// ---------------------------------------------------------------------------
 
 export enum MemoryType {
   FACT = 'FACT',
@@ -35,10 +30,6 @@ export enum MemoryType {
   WORKFLOW = 'WORKFLOW',
 }
 
-// ---------------------------------------------------------------------------
-// Memory Scopes
-// ---------------------------------------------------------------------------
-
 export enum MemoryScope {
   GLOBAL = 'GLOBAL',
   REPOSITORY = 'REPOSITORY',
@@ -48,15 +39,43 @@ export enum MemoryScope {
 }
 
 // ---------------------------------------------------------------------------
-// Memory Statuses
+// Explicit Memory Lifecycle Statuses
 // ---------------------------------------------------------------------------
 
 export enum MemoryStatus {
+  CANDIDATE = 'CANDIDATE',
   ACTIVE = 'ACTIVE',
-  PROMOTED = 'PROMOTED',
   STALE = 'STALE',
   INVALIDATED = 'INVALIDATED',
+  ARCHIVED = 'ARCHIVED',
+  PROMOTED = 'PROMOTED',
   EXPIRED = 'EXPIRED',
+}
+
+// ---------------------------------------------------------------------------
+// Source Provenance
+// ---------------------------------------------------------------------------
+
+export interface MemoryProvenance {
+  readonly source: string;
+  readonly toolName?: string;
+  readonly filePath?: string;
+  readonly commitHash?: string;
+  readonly agentPhase?: string;
+  readonly timestamp: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Memory Conflict / Contradiction
+// ---------------------------------------------------------------------------
+
+export interface MemoryConflict {
+  readonly conflictId: string;
+  readonly existingRecord: MemoryRecord;
+  readonly conflictingRecord: MemoryRecord;
+  readonly topic: string;
+  readonly reason: string;
+  readonly detectedAt: Date;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,10 +88,12 @@ export interface MemoryRecord {
   readonly type: MemoryType;
   readonly content: string;
   readonly source: string;
+  readonly provenance?: MemoryProvenance;
   readonly confidence: number; // 0.0 to 1.0
   readonly importance: number; // 0.0 to 1.0
   readonly scope: MemoryScope;
   readonly scopeTarget?: string;
+  readonly topic?: string;
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly lastUsed: Date;
@@ -102,6 +123,7 @@ export interface ScoredMemoryRecord {
 
 export interface MemoryQuery {
   readonly queryText?: string;
+  readonly topic?: string;
   readonly tiers?: ReadonlyArray<MemoryTier>;
   readonly types?: ReadonlyArray<MemoryType>;
   readonly scopes?: ReadonlyArray<MemoryScope>;
@@ -110,6 +132,7 @@ export interface MemoryQuery {
   readonly minConfidence?: number;
   readonly tags?: ReadonlyArray<string>;
   readonly activeOnly?: boolean;
+  readonly statuses?: ReadonlyArray<MemoryStatus>;
   readonly limit?: number;
 }
 
@@ -119,14 +142,17 @@ export interface MemoryQuery {
 
 export interface CreateMemoryRecordParams {
   readonly id?: MemoryId;
-  readonly tier: MemoryTier;
+  readonly tier?: MemoryTier;
   readonly type: MemoryType;
   readonly content: string;
   readonly source: string;
+  readonly provenance?: MemoryProvenance;
   readonly confidence?: number;
   readonly importance?: number;
   readonly scope?: MemoryScope;
   readonly scopeTarget?: string;
+  readonly topic?: string;
+  readonly status?: MemoryStatus;
   readonly lastVerified?: Date | null;
   readonly expiresAt?: Date | null;
   readonly tags?: ReadonlyArray<string>;

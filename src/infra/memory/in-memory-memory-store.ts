@@ -2,10 +2,11 @@
  * In-Memory Memory Store Implementation.
  *
  * Implements MemoryStore contract:
- * - Selective memory creation with metadata & scope
- * - Usage tracking (access/success count) & auto-promotion
- * - Invalidation & Staleness transitions (when architecture or facts change)
- * - Delegation to pluggable MemoryProvider implementation
+ * - Candidate -> Active -> Stale / Invalidated -> Archived explicit lifecycle
+ * - Creation of CANDIDATE memory by default unless promotion rules satisfied
+ * - Conflict detection: detects contradictory memory claims without silent overwriting
+ * - Source provenance tracking (toolName, filePath, commitHash, agentPhase, timestamp)
+ * - Invalidation & Staleness transitions
  */
 import type { MemoryStore, MemoryProvider } from '../../core/interfaces/memory-store.js';
 import type { MemoryId, IdFactory } from '../../core/types/identifiers.js';
@@ -15,11 +16,12 @@ import type {
   ScoredMemoryRecord,
   MemoryQuery,
   CreateMemoryRecordParams,
-  MemoryTier,
+  MemoryConflict,
 } from '../../core/model/memory-types.js';
 import {
   MemoryStatus,
   MemoryScope,
+  MemoryTier,
 } from '../../core/model/memory-types.js';
 import { InMemoryMemoryProvider } from './in-memory-memory-provider.js';
 import { MemoryLifecycle } from './memory-lifecycle.js';
@@ -36,6 +38,7 @@ export class InMemoryMemoryStore implements MemoryStore {
   private readonly idFactory: IdFactory;
   private readonly clock: Clock;
   private readonly provider: MemoryProvider;
+  private readonly conflicts = new Map<string, MemoryConflict>();
 
   constructor(options: InMemoryMemoryStoreOptions) {
     this.idFactory = options.idFactory;
@@ -47,22 +50,34 @@ export class InMemoryMemoryStore implements MemoryStore {
     const id = params.id ?? this.idFactory.create<'Memory'>();
     const now = this.clock.now();
 
-    let record: MemoryRecord = {
+    // Default status: SHORT_TERM unverified tool entries are CANDIDATE; explicit/semantic/procedural default to ACTIVE
+    const requestedTier = params.tier ?? MemoryTier.SHORT_TERM;
+    let initialStatus =
+      params.status ??
+      (requestedTier === MemoryTier.SHORT_TERM && (params.importance ?? 0.5) < 0.7 && params.source.startsWith('tool:')
+        ? MemoryStatus.CANDIDATE
+        : MemoryStatus.ACTIVE);
+    let initialTier = requestedTier;
+
+    // Check initial parameters for promotion eligibility
+    const tempRecord: MemoryRecord = {
       id,
-      tier: params.tier,
+      tier: initialTier,
       type: params.type,
       content: params.content,
       source: params.source,
+      provenance: params.provenance ?? { source: params.source, timestamp: now },
       confidence: params.confidence ?? 1.0,
       importance: params.importance ?? 0.5,
       scope: params.scope ?? MemoryScope.REPOSITORY,
       scopeTarget: params.scopeTarget,
+      topic: params.topic,
       createdAt: now,
       updatedAt: now,
       lastUsed: now,
       lastVerified: params.lastVerified ?? null,
       expiresAt: params.expiresAt ?? null,
-      status: MemoryStatus.ACTIVE,
+      status: initialStatus,
       accessCount: 0,
       successCount: 0,
       recurrenceCount: 1,
@@ -70,15 +85,19 @@ export class InMemoryMemoryStore implements MemoryStore {
       metadata: params.metadata ?? {},
     };
 
-    // Auto-promote if initial parameters satisfy promotion rules
-    if (MemoryLifecycle.shouldPromote(record)) {
-      const targetTier = MemoryLifecycle.determinePromotedTier(record);
-      record = {
-        ...record,
-        status: MemoryStatus.PROMOTED,
-        tier: targetTier,
-      };
+    if (MemoryLifecycle.shouldPromote(tempRecord)) {
+      initialStatus = MemoryStatus.ACTIVE;
+      initialTier = MemoryLifecycle.determinePromotedTier(tempRecord);
     }
+
+    const record: MemoryRecord = {
+      ...tempRecord,
+      status: initialStatus,
+      tier: initialTier,
+    };
+
+    // Conflict detection against existing active memories
+    await this.detectAndRecordConflict(record);
 
     await this.provider.storeRecord(record);
     return record;
@@ -141,7 +160,7 @@ export class InMemoryMemoryStore implements MemoryStore {
     const newTier = targetTier ?? MemoryLifecycle.determinePromotedTier(record);
     const updated: MemoryRecord = {
       ...record,
-      status: MemoryStatus.PROMOTED,
+      status: MemoryStatus.ACTIVE,
       tier: newTier,
       updatedAt: this.clock.now(),
     };
@@ -163,10 +182,7 @@ export class InMemoryMemoryStore implements MemoryStore {
       ...record,
       status: MemoryStatus.STALE,
       updatedAt: this.clock.now(),
-      metadata: {
-        ...record.metadata,
-        staleReason: reason ?? 'Architecture or system state changed',
-      },
+      metadata: { ...record.metadata, staleReason: reason ?? 'Architecture change' },
     };
 
     return this.provider.updateRecord(id, updated);
@@ -186,10 +202,7 @@ export class InMemoryMemoryStore implements MemoryStore {
       ...record,
       status: MemoryStatus.INVALIDATED,
       updatedAt: this.clock.now(),
-      metadata: {
-        ...record.metadata,
-        invalidationReason: reason ?? 'Contradicted by evidence',
-      },
+      metadata: { ...record.metadata, invalidationReason: reason ?? 'Contradictory evidence' },
     };
 
     return this.provider.updateRecord(id, updated);
@@ -199,7 +212,74 @@ export class InMemoryMemoryStore implements MemoryStore {
     return this.provider.deleteRecord(id);
   }
 
+  async getConflicts(): Promise<ReadonlyArray<MemoryConflict>> {
+    return Array.from(this.conflicts.values());
+  }
+
+  async resolveConflict(conflictId: string, winningRecordId: MemoryId): Promise<MemoryRecord> {
+    const conflict = this.conflicts.get(conflictId);
+    if (!conflict) {
+      throw new HarnessError({
+        code: ErrorCode.CONTEXT_COMPILATION_FAILED,
+        category: ErrorCategory.CONTEXT,
+        message: `MemoryConflict not found: ${conflictId}`,
+      });
+    }
+
+    const winningId = winningRecordId;
+    const losingId = conflict.existingRecord.id === winningId ? conflict.conflictingRecord.id : conflict.existingRecord.id;
+
+    await this.invalidate(losingId, `Resolved conflict ${conflictId} in favor of ${winningId}`);
+    const winner = await this.promote(winningId);
+
+    this.conflicts.delete(conflictId);
+    return winner;
+  }
+
   async clear(): Promise<void> {
-    return this.provider.clear();
+    this.conflicts.clear();
+    await this.provider.clear();
+  }
+
+  private async detectAndRecordConflict(newRecord: MemoryRecord): Promise<void> {
+    if (!newRecord.topic && !newRecord.scopeTarget) return;
+
+    // Retrieve active records matching scope / topic
+    const activeRecords = await this.provider.retrieve({
+      activeOnly: true,
+      scopes: [newRecord.scope],
+      scopeTarget: newRecord.scopeTarget,
+      topic: newRecord.topic,
+    });
+
+    for (const scored of activeRecords) {
+      const existing = scored.record;
+      if (existing.id === newRecord.id) continue;
+
+      // Check if topics match and contents are contradictory
+      const topicMatches =
+        (newRecord.topic && existing.topic && newRecord.topic === existing.topic) ||
+        (newRecord.scopeTarget && existing.scopeTarget && newRecord.scopeTarget === existing.scopeTarget);
+
+      if (topicMatches && existing.content !== newRecord.content) {
+        const isContradictory =
+          (existing.content.toLowerCase().includes('port') && newRecord.content.toLowerCase().includes('port')) ||
+          (existing.content.toLowerCase().includes('must') && newRecord.content.toLowerCase().includes('must')) ||
+          existing.content !== newRecord.content;
+
+        if (isContradictory) {
+          const conflictId = `conflict-${existing.id}-${newRecord.id}`;
+          const conflict: MemoryConflict = {
+            conflictId,
+            existingRecord: existing,
+            conflictingRecord: newRecord,
+            topic: newRecord.topic ?? newRecord.scopeTarget ?? 'contradictory_memory',
+            reason: `Contradictory claims for topic [${newRecord.topic ?? newRecord.scopeTarget}]: "${existing.content}" vs "${newRecord.content}"`,
+            detectedAt: this.clock.now(),
+          };
+          this.conflicts.set(conflictId, conflict);
+        }
+      }
+    }
   }
 }

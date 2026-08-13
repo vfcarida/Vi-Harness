@@ -31,10 +31,16 @@ export class MemoryRetriever {
       }
 
       // 2. Active status filter
-      if (activeOnly) {
+      if (query.statuses && query.statuses.length > 0) {
+        if (!query.statuses.includes(record.status)) continue;
+      } else if (activeOnly) {
         if (record.status !== MemoryStatus.ACTIVE && record.status !== MemoryStatus.PROMOTED) {
           continue;
         }
+      }
+
+      if (query.topic && record.topic && record.topic !== query.topic) {
+        continue;
       }
 
       // 3. Tiers filter
