@@ -1,0 +1,443 @@
+/**
+ * OpenAI-Compatible Provider Adapter.
+ *
+ * Generic HTTP provider adapter compatible with:
+ * - OpenAI
+ * - vLLM
+ * - Ollama (via openai endpoint)
+ * - DeepSeek
+ * - Groq
+ * - Anyscale / Together
+ * - LocalAI / LM Studio
+ *
+ * Uses standard Node `fetch` with NO vendor SDK dependencies.
+ * Translates between vendor-neutral types and the OpenAI chat/completions HTTP schema.
+ */
+import type { ModelProvider } from '../../core/interfaces/model-provider.js';
+import type {
+  ModelRequest,
+  ModelResponse,
+  ModelStreamChunk,
+  ModelDescriptor,
+  ModelHealth,
+  ToolCall,
+  TokenUsage,
+} from '../../core/model/model-io.js';
+import {
+  FinishReason,
+  MessageRole,
+  ModelCapability,
+  ProviderHealthStatus,
+} from '../../core/model/model-io.js';
+import { HarnessError } from '../../core/errors/base-error.js';
+import { ErrorCode, ErrorCategory } from '../../core/errors/error-codes.js';
+
+export interface OpenAICompatibleProviderOptions {
+  readonly providerId?: string;
+  readonly baseUrl?: string;
+  readonly apiKey?: string;
+  readonly defaultModelId?: string;
+  readonly customFetch?: typeof fetch;
+  readonly costPer1kInputTokensDollars?: number;
+  readonly costPer1kOutputTokensDollars?: number;
+}
+
+export class OpenAICompatibleProvider implements ModelProvider {
+  public readonly providerId: string;
+  public readonly descriptor: ModelDescriptor;
+  private readonly baseUrl: string;
+  private readonly apiKey: string;
+  private readonly defaultModelId: string;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(options: OpenAICompatibleProviderOptions = {}) {
+    this.providerId = options.providerId ?? 'openai-compatible';
+    this.baseUrl = options.baseUrl ?? 'https://api.openai.com/v1';
+    this.apiKey = options.apiKey ?? 'dummy-key';
+    this.defaultModelId = options.defaultModelId ?? 'gpt-4o';
+    this.fetchImpl = options.customFetch ?? globalThis.fetch;
+
+    this.descriptor = {
+      id: this.defaultModelId,
+      name: `OpenAI-Compatible (${this.defaultModelId})`,
+      providerId: this.providerId,
+      version: '1.0.0',
+      capabilities: {
+        capabilities: new Set([
+          ModelCapability.REASONING,
+          ModelCapability.CODING,
+          ModelCapability.TOOL_USE,
+          ModelCapability.STRUCTURED_OUTPUT,
+          ModelCapability.VISION,
+          ModelCapability.LONG_CONTEXT,
+          ModelCapability.STREAMING,
+          ModelCapability.PARALLEL_TOOL_CALLS,
+        ]),
+        maxContextTokens: 128000,
+        maxOutputTokens: 16384,
+        supportsSystemPrompt: true,
+      },
+      costPer1kInputTokensDollars: options.costPer1kInputTokensDollars ?? 0.0025,
+      costPer1kOutputTokensDollars: options.costPer1kOutputTokensDollars ?? 0.01,
+    };
+  }
+
+  async complete(request: ModelRequest): Promise<ModelResponse> {
+    const startTime = Date.now();
+    const payload = this.buildPayload(request, false);
+
+    const url = `${this.baseUrl.replace(/\/$/, '')}/chat/completions`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: request.signal,
+      });
+    } catch (err) {
+      throw mapFetchError(err, this.providerId);
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw mapHttpStatusToError(response.status, errorText, this.providerId);
+    }
+
+    const data = (await response.json()) as any;
+    const latencyMs = Date.now() - startTime;
+
+    return this.parseResponse(data, request, latencyMs);
+  }
+
+  async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    const payload = this.buildPayload(request, true);
+
+    const url = `${this.baseUrl.replace(/\/$/, '')}/chat/completions`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: request.signal,
+      });
+    } catch (err) {
+      throw mapFetchError(err, this.providerId);
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw mapHttpStatusToError(response.status, errorText, this.providerId);
+    }
+
+    if (!response.body) {
+      throw new HarnessError({
+        code: ErrorCode.MODEL_INVALID_RESPONSE,
+        category: ErrorCategory.MODEL,
+        message: `[${this.providerId}] Response body is null during stream`,
+      });
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith(':')) continue;
+          if (trimmed === 'data: [DONE]') return;
+
+          if (trimmed.startsWith('data: ')) {
+            const jsonStr = trimmed.slice(6);
+            try {
+              const chunkData = JSON.parse(jsonStr);
+              const chunk = parseStreamChunk(chunkData);
+              if (chunk) yield chunk;
+            } catch {
+              // Ignore malformed SSE lines
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  async getHealth(): Promise<ModelHealth> {
+    const start = Date.now();
+    try {
+      // Light check (e.g. GET models endpoint or base URL ping)
+      const res = await this.fetchImpl(`${this.baseUrl.replace(/\/$/, '')}/models`, {
+        method: 'GET',
+        headers: this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {},
+      });
+      const latencyMs = Date.now() - start;
+
+      return {
+        providerId: this.providerId,
+        status: res.ok ? ProviderHealthStatus.HEALTHY : ProviderHealthStatus.DEGRADED,
+        latencyMs,
+        lastChecked: new Date(),
+        errorMessage: !res.ok ? `HTTP ${res.status}` : undefined,
+      };
+    } catch (err) {
+      return {
+        providerId: this.providerId,
+        status: ProviderHealthStatus.UNHEALTHY,
+        lastChecked: new Date(),
+        errorMessage: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  private buildPayload(request: ModelRequest, stream: boolean): Record<string, unknown> {
+    const messages: any[] = [];
+
+    if (request.systemPrompt) {
+      messages.push({ role: 'system', content: request.systemPrompt });
+    }
+
+    for (const m of request.messages) {
+      const roleMap: Record<MessageRole, string> = {
+        [MessageRole.SYSTEM]: 'system',
+        [MessageRole.USER]: 'user',
+        [MessageRole.ASSISTANT]: 'assistant',
+        [MessageRole.TOOL]: 'tool',
+      };
+      const msgObj: any = {
+        role: roleMap[m.role] ?? 'user',
+        content: m.content,
+      };
+      if (m.toolCallId) msgObj.tool_call_id = m.toolCallId;
+      if (m.name) msgObj.name = m.name;
+      messages.push(msgObj);
+    }
+
+    const payload: any = {
+      model: request.modelId ?? this.defaultModelId,
+      messages,
+      stream,
+    };
+
+    if (request.temperature !== undefined) payload.temperature = request.temperature;
+    if (request.topP !== undefined) payload.top_p = request.topP;
+    if (request.maxTokens !== undefined) payload.max_tokens = request.maxTokens;
+    if (request.stopSequences && request.stopSequences.length > 0) {
+      payload.stop = request.stopSequences;
+    }
+
+    if (request.tools && request.tools.length > 0) {
+      payload.tools = request.tools.map((t) => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.inputSchema,
+        },
+      }));
+    }
+
+    if (request.structuredOutputSchema) {
+      payload.response_format = {
+        type: 'json_schema',
+        json_schema: {
+          name: request.structuredOutputSchema.name,
+          schema: request.structuredOutputSchema.schema,
+          strict: request.structuredOutputSchema.strict ?? true,
+        },
+      };
+    }
+
+    return payload;
+  }
+
+  private parseResponse(
+    data: any,
+    request: ModelRequest,
+    latencyMs: number,
+  ): ModelResponse {
+    const choice = data.choices?.[0];
+    if (!choice) {
+      throw new HarnessError({
+        code: ErrorCode.MODEL_INVALID_RESPONSE,
+        category: ErrorCategory.MODEL,
+        message: `[${this.providerId}] Response contained no choices`,
+        context: { data },
+      });
+    }
+
+    const message = choice.message ?? {};
+    const content = message.content ?? '';
+
+    // Tool calls
+    const toolCalls: ToolCall[] = (message.tool_calls ?? []).map((tc: any) => {
+      let args: Record<string, unknown> = {};
+      try {
+        args = typeof tc.function?.arguments === 'string'
+          ? JSON.parse(tc.function.arguments)
+          : tc.function?.arguments ?? {};
+      } catch {
+        args = { raw: tc.function?.arguments };
+      }
+
+      return {
+        id: tc.id ?? `call_${Math.random().toString(36).substring(2, 7)}`,
+        name: tc.function?.name ?? 'unknown_tool',
+        input: args,
+      };
+    });
+
+    // Structured Output
+    let structuredOutput: Record<string, unknown> | undefined;
+    if (request.structuredOutputSchema && content) {
+      try {
+        structuredOutput = JSON.parse(content);
+      } catch {
+        // Leave undefined if parse fails
+      }
+    }
+
+    // Usage
+    const usageObj = data.usage ?? {};
+    const usage: TokenUsage = {
+      inputTokens: usageObj.prompt_tokens ?? 0,
+      outputTokens: usageObj.completion_tokens ?? 0,
+      totalTokens: usageObj.total_tokens ?? (usageObj.prompt_tokens ?? 0) + (usageObj.completion_tokens ?? 0),
+      reasoningTokens: usageObj.completion_tokens_details?.reasoning_tokens,
+    };
+
+    const cost =
+      (usage.inputTokens / 1000) * this.descriptor.costPer1kInputTokensDollars +
+      (usage.outputTokens / 1000) * this.descriptor.costPer1kOutputTokensDollars;
+
+    const finishReason = mapFinishReason(choice.finish_reason);
+
+    return {
+      requestId: data.id ?? `req_${Date.now()}`,
+      modelId: data.model ?? request.modelId ?? this.defaultModelId,
+      providerId: this.providerId,
+      content,
+      structuredOutput,
+      toolCalls,
+      usage,
+      finishReason,
+      latencyMs,
+      estimatedCostDollars: cost,
+    };
+  }
+}
+
+function parseStreamChunk(data: any): ModelStreamChunk | null {
+  const choice = data.choices?.[0];
+  if (!choice) return null;
+
+  const delta = choice.delta ?? {};
+  const finishReason = choice.finish_reason ? mapFinishReason(choice.finish_reason) : undefined;
+
+  let deltaToolCall: Partial<ToolCall> | undefined;
+  if (delta.tool_calls?.[0]) {
+    const tc = delta.tool_calls[0];
+    let args: any = {};
+    if (tc.function?.arguments) {
+      try {
+        args = JSON.parse(tc.function.arguments);
+      } catch {
+        args = { deltaArguments: tc.function.arguments };
+      }
+    }
+    deltaToolCall = {
+      id: tc.id,
+      name: tc.function?.name,
+      input: args,
+    };
+  }
+
+  return {
+    deltaText: delta.content ?? undefined,
+    deltaToolCall,
+    finishReason,
+    usage: data.usage
+      ? {
+          inputTokens: data.usage.prompt_tokens ?? 0,
+          outputTokens: data.usage.completion_tokens ?? 0,
+          totalTokens: data.usage.total_tokens ?? 0,
+        }
+      : undefined,
+  };
+}
+
+function mapFinishReason(rawReason?: string): FinishReason {
+  switch (rawReason) {
+    case 'stop':
+      return FinishReason.STOP;
+    case 'tool_calls':
+    case 'function_call':
+      return FinishReason.TOOL_CALL;
+    case 'length':
+      return FinishReason.MAX_TOKENS;
+    case 'content_filter':
+      return FinishReason.CONTENT_FILTER;
+    default:
+      return FinishReason.STOP;
+  }
+}
+
+function mapFetchError(err: unknown, providerId: string): HarnessError {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes('aborted') || msg.includes('cancel')) {
+    return new HarnessError({
+      code: ErrorCode.MODEL_UNAVAILABLE,
+      category: ErrorCategory.MODEL,
+      message: `[${providerId}] Request was cancelled or aborted`,
+    });
+  }
+  return new HarnessError({
+    code: ErrorCode.INFRA_CONNECTION_FAILED,
+    category: ErrorCategory.INFRASTRUCTURE,
+    message: `[${providerId}] Connection failed: ${msg}`,
+    cause: err instanceof Error ? err : undefined,
+  });
+}
+
+function mapHttpStatusToError(status: number, body: string, providerId: string): HarnessError {
+  let code = ErrorCode.MODEL_INVALID_RESPONSE;
+  if (status === 429) {
+    code = ErrorCode.MODEL_RATE_LIMITED;
+  } else if (status === 408 || status === 504) {
+    code = ErrorCode.MODEL_TIMEOUT;
+  } else if (status >= 500 || status === 401 || status === 403) {
+    code = ErrorCode.MODEL_UNAVAILABLE;
+  }
+
+  return new HarnessError({
+    code,
+    category: ErrorCategory.MODEL,
+    message: `[${providerId}] HTTP ${status}: ${body.slice(0, 200)}`,
+    context: { status, body },
+  });
+}

@@ -1,0 +1,25 @@
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: false,
+    environment: 'node',
+    include: ['tests/**/*.test.ts'],
+    exclude: ['node_modules/**', 'dist/**', 'tests/fixtures/**'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/index.ts'],
+    },
+    typecheck: {
+      enabled: false,
+    },
+  },
+  resolve: {
+    alias: {
+      '@vi-harness/core': new URL('./src/core', import.meta.url).pathname,
+      '@vi-harness/infra': new URL('./src/infra', import.meta.url).pathname,
+      '@vi-harness/di': new URL('./src/di', import.meta.url).pathname,
+    },
+  },
+});
