@@ -398,7 +398,8 @@ describe('Enterprise Coding-Agent Harness — End-to-End Integration Suite', () 
     expect(checkpoint.id).toBeDefined();
 
     // 16. Task reaches DONE terminal state
-    stateMachine.apply(StateEvent.VERIFICATION_PASSED); // VERIFY -> DONE
+    const doneEvidenceId = idFactory.create<'Evidence'>();
+    stateMachine.apply(StateEvent.VERIFICATION_PASSED, { evidenceIds: [doneEvidenceId] }); // VERIFY -> DONE
     expect(stateMachine.phase).toBe(AgentPhase.DONE);
     expect(stateMachine.isTerminal).toBe(true);
 
@@ -487,7 +488,8 @@ describe('Enterprise Coding-Agent Harness — End-to-End Integration Suite', () 
     expect(sm.phase).toBe(AgentPhase.VERIFY);
 
     // 3. Verification passes -> DONE
-    sm.apply(StateEvent.VERIFICATION_PASSED);
+    const doneEvidenceId = idFactory.create<'Evidence'>();
+    sm.apply(StateEvent.VERIFICATION_PASSED, { evidenceIds: [doneEvidenceId] });
     expect(sm.phase).toBe(AgentPhase.DONE);
   });
 

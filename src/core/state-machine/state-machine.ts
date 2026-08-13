@@ -23,6 +23,8 @@ import {
 } from '../model/state.js';
 import type { AgentState, StateTransition } from '../model/state.js';
 import { validateTransitionOrThrow } from './transition-validator.js';
+import { HarnessError } from '../errors/base-error.js';
+import { ErrorCode, ErrorCategory } from '../errors/error-codes.js';
 
 // ---------------------------------------------------------------------------
 // State machine
@@ -116,6 +118,22 @@ export class StateMachine {
       event,
       options?.isLlmEmitted ?? false,
     );
+
+    // DONE evidence gate: transitioning to DONE via VERIFICATION_PASSED
+    // requires at least one evidence ID. The agent must prove success.
+    if (
+      targetPhase === AgentPhase.DONE &&
+      event === StateEvent.VERIFICATION_PASSED &&
+      (!options?.evidenceIds || options.evidenceIds.length === 0)
+    ) {
+      throw new HarnessError({
+        code: ErrorCode.STATE_INVALID_TRANSITION,
+        category: ErrorCategory.STATE,
+        message: 'Transition to DONE via VERIFICATION_PASSED requires at least one evidenceId. The agent must prove task completion.',
+        context: { from: this._state.phase, event, evidenceIds: options?.evidenceIds ?? [] },
+      });
+    }
+
 
     const now = this._clock.now();
     const previousPhase = this._state.phase;

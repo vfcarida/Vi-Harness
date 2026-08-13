@@ -100,7 +100,8 @@ describe('State Machine & Transition Validation', () => {
       expect(sm.phase).toBe(AgentPhase.VERIFY);
       expect(sm.state.iterationCount).toBe(1);
 
-      sm.apply(StateEvent.VERIFICATION_PASSED);
+      const evidenceId = idFactory.create<'Evidence'>();
+      sm.apply(StateEvent.VERIFICATION_PASSED, { evidenceIds: [evidenceId] });
       expect(sm.phase).toBe(AgentPhase.DONE);
       expect(sm.isTerminal).toBe(true);
       expect(sm.history).toHaveLength(5);
@@ -122,7 +123,8 @@ describe('State Machine & Transition Validation', () => {
       expect(sm.phase).toBe(AgentPhase.VERIFY);
       expect(sm.state.iterationCount).toBe(1);
 
-      sm.apply(StateEvent.VERIFICATION_PASSED);
+      const evidenceId = idFactory.create<'Evidence'>();
+      sm.apply(StateEvent.VERIFICATION_PASSED, { evidenceIds: [evidenceId] });
       expect(sm.phase).toBe(AgentPhase.DONE);
     });
 
@@ -193,9 +195,19 @@ describe('State Machine & Transition Validation', () => {
           idFactory,
           clock: testClk,
         });
-        for (const ev of eventsSequence) {
+        const evidenceId = idFactory.create<'Evidence'>();
+        const eventsWithOptions: Array<[StateEvent, { evidenceIds?: string[] }?]> = [
+          [StateEvent.START],
+          [StateEvent.EXPLORE_COMPLETE],
+          [StateEvent.PLAN_READY],
+          [StateEvent.IMPLEMENTATION_COMPLETE],
+          [StateEvent.VERIFICATION_FAILED],
+          [StateEvent.REPAIR_COMPLETE],
+          [StateEvent.VERIFICATION_PASSED, { evidenceIds: [evidenceId] }],
+        ];
+        for (const [ev, opts] of eventsWithOptions) {
           testClk.advance(1000);
-          sm.apply(ev);
+          sm.apply(ev, opts as any);
         }
         return sm;
       };

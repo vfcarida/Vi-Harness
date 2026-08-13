@@ -470,7 +470,8 @@ export class PricingEngine {
     });
     expect(checkpoint.id).toBeDefined();
 
-    const t7 = stateMachine.apply(StateEvent.VERIFICATION_PASSED); // VERIFY -> DONE
+    const doneEvidenceId = idFactory.create<'Evidence'>();
+    const t7 = stateMachine.apply(StateEvent.VERIFICATION_PASSED, { evidenceIds: [doneEvidenceId] }); // VERIFY -> DONE
     transitionHistory.push(t7);
     expect(stateMachine.phase).toBe(AgentPhase.DONE);
     expect(stateMachine.isTerminal).toBe(true);

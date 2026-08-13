@@ -44,16 +44,20 @@ export const TRANSITION_TABLE: ReadonlyArray<TransitionRule> = [
 
   // === IMPLEMENT ===
   { from: AgentPhase.IMPLEMENT, event: StateEvent.IMPLEMENTATION_COMPLETE, to: AgentPhase.VERIFY },
+  { from: AgentPhase.IMPLEMENT, event: StateEvent.BLOCK, to: AgentPhase.BLOCKED },
   { from: AgentPhase.IMPLEMENT, event: StateEvent.ESCALATE, to: AgentPhase.HUMAN_REQUIRED },
   { from: AgentPhase.IMPLEMENT, event: StateEvent.CANCEL, to: AgentPhase.CANCELLED },
   { from: AgentPhase.IMPLEMENT, event: StateEvent.BUDGET_EXHAUSTED, to: AgentPhase.BUDGET_EXCEEDED },
+  { from: AgentPhase.IMPLEMENT, event: StateEvent.REGRESSION_FOUND, to: AgentPhase.REGRESSION_DETECTED },
   { from: AgentPhase.IMPLEMENT, event: StateEvent.MARK_FAILED, to: AgentPhase.FAILED },
 
   // === VERIFY ===
   { from: AgentPhase.VERIFY, event: StateEvent.VERIFICATION_PASSED, to: AgentPhase.DONE },
   { from: AgentPhase.VERIFY, event: StateEvent.VERIFICATION_FAILED, to: AgentPhase.REPAIR },
+  { from: AgentPhase.VERIFY, event: StateEvent.BLOCK, to: AgentPhase.BLOCKED },
   { from: AgentPhase.VERIFY, event: StateEvent.ESCALATE, to: AgentPhase.HUMAN_REQUIRED },
   { from: AgentPhase.VERIFY, event: StateEvent.REGRESSION_FOUND, to: AgentPhase.REGRESSION_DETECTED },
+  { from: AgentPhase.VERIFY, event: StateEvent.NO_PROGRESS, to: AgentPhase.HUMAN_REQUIRED },
   { from: AgentPhase.VERIFY, event: StateEvent.CANCEL, to: AgentPhase.CANCELLED },
   { from: AgentPhase.VERIFY, event: StateEvent.BUDGET_EXHAUSTED, to: AgentPhase.BUDGET_EXCEEDED },
   { from: AgentPhase.VERIFY, event: StateEvent.MARK_DONE, to: AgentPhase.DONE },

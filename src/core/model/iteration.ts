@@ -62,6 +62,21 @@ export interface IterationFingerprint {
 
   /** Phase the agent was in at start of iteration. */
   readonly phaseAtStart: AgentPhase;
+
+  /**
+   * Ordered sequence of phases the agent visited this iteration.
+   * Used for N-phase trajectory oscillation detection.
+   * Example: [IMPLEMENT, VERIFY, REPAIR]
+   */
+  readonly stateTrajectory: ReadonlyArray<AgentPhase>;
+
+  /**
+   * Stable hash identifying a specific tool + error combination.
+   * Format: "<toolName>:<errorCodeOrMessage hash>"
+   * Null if no tool failure occurred in this iteration.
+   * Used for repeated tool failure detection.
+   */
+  readonly toolFailureSignature: string | null;
 }
 
 // ---------------------------------------------------------------------------

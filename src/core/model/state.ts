@@ -111,6 +111,9 @@ export enum StateEvent {
   // Repair
   REPAIR_COMPLETE = 'REPAIR_COMPLETE',
 
+  // Blocking — runtime-only, fired when a required resource is unavailable
+  BLOCK = 'BLOCK',
+
   // Human
   ESCALATE = 'ESCALATE',
   HUMAN_RESPONDED = 'HUMAN_RESPONDED',
@@ -143,6 +146,7 @@ export const RUNTIME_ONLY_EVENTS: ReadonlySet<StateEvent> = new Set([
   StateEvent.NO_PROGRESS,
   StateEvent.MAX_REPAIRS_EXCEEDED,
   StateEvent.CANCEL,
+  StateEvent.BLOCK, // Blocking is a runtime decision, not an LLM decision
 ]);
 
 // ---------------------------------------------------------------------------
