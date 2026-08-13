@@ -13,6 +13,7 @@
  * Uses standard Node `fetch` with NO vendor SDK dependencies.
  * Translates between vendor-neutral types and the OpenAI chat/completions HTTP schema.
  */
+import { z } from 'zod';
 import type { ModelProvider } from '../../core/interfaces/model-provider.js';
 import type {
   ModelRequest,
@@ -41,6 +42,43 @@ export interface OpenAICompatibleProviderOptions {
   readonly costPer1kInputTokensDollars?: number;
   readonly costPer1kOutputTokensDollars?: number;
 }
+
+// Zod Schemas for Response Validation
+const OpenAIToolCallFunctionSchema = z.object({
+  name: z.string({ required_error: 'Tool call missing function name' }),
+  arguments: z.union([z.string(), z.record(z.unknown())]).optional(),
+});
+
+const OpenAIToolCallSchema = z.object({
+  id: z.string().optional(),
+  type: z.string().optional(),
+  function: OpenAIToolCallFunctionSchema,
+});
+
+const OpenAIChoiceSchema = z.object({
+  index: z.number().optional(),
+  message: z.object({
+    role: z.string().optional(),
+    content: z.string().nullable().optional(),
+    tool_calls: z.array(OpenAIToolCallSchema).optional(),
+  }),
+  finish_reason: z.string().nullable().optional(),
+});
+
+const OpenAIResponseSchema = z.object({
+  id: z.string().optional(),
+  object: z.string().optional(),
+  model: z.string().optional(),
+  choices: z.array(OpenAIChoiceSchema).min(1, 'Response contained no choices'),
+  usage: z.object({
+    prompt_tokens: z.number().optional(),
+    completion_tokens: z.number().optional(),
+    total_tokens: z.number().optional(),
+    completion_tokens_details: z.object({
+      reasoning_tokens: z.number().optional(),
+    }).optional(),
+  }).optional(),
+});
 
 export class OpenAICompatibleProvider implements ModelProvider {
   public readonly providerId: string;
@@ -111,7 +149,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
       throw mapHttpStatusToError(response.status, errorText, this.providerId);
     }
 
-    const data = (await response.json()) as any;
+    const data = await response.json();
     const latencyMs = Date.now() - startTime;
 
     return this.parseResponse(data, request, latencyMs);
@@ -191,7 +229,6 @@ export class OpenAICompatibleProvider implements ModelProvider {
   async getHealth(): Promise<ModelHealth> {
     const start = Date.now();
     try {
-      // Light check (e.g. GET models endpoint or base URL ping)
       const res = await this.fetchImpl(`${this.baseUrl.replace(/\/$/, '')}/models`, {
         method: 'GET',
         headers: this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {},
@@ -216,7 +253,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
   }
 
   private buildPayload(request: ModelRequest, stream: boolean): Record<string, unknown> {
-    const messages: any[] = [];
+    const messages: Record<string, unknown>[] = [];
 
     if (request.systemPrompt) {
       messages.push({ role: 'system', content: request.systemPrompt });
@@ -229,30 +266,30 @@ export class OpenAICompatibleProvider implements ModelProvider {
         [MessageRole.ASSISTANT]: 'assistant',
         [MessageRole.TOOL]: 'tool',
       };
-      const msgObj: any = {
+      const msgObj: Record<string, unknown> = {
         role: roleMap[m.role] ?? 'user',
         content: m.content,
       };
-      if (m.toolCallId) msgObj.tool_call_id = m.toolCallId;
-      if (m.name) msgObj.name = m.name;
+      if (m.toolCallId) msgObj['tool_call_id'] = m.toolCallId;
+      if (m.name) msgObj['name'] = m.name;
       messages.push(msgObj);
     }
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       model: request.modelId ?? this.defaultModelId,
       messages,
       stream,
     };
 
-    if (request.temperature !== undefined) payload.temperature = request.temperature;
-    if (request.topP !== undefined) payload.top_p = request.topP;
-    if (request.maxTokens !== undefined) payload.max_tokens = request.maxTokens;
+    if (request.temperature !== undefined) payload['temperature'] = request.temperature;
+    if (request.topP !== undefined) payload['top_p'] = request.topP;
+    if (request.maxTokens !== undefined) payload['max_tokens'] = request.maxTokens;
     if (request.stopSequences && request.stopSequences.length > 0) {
-      payload.stop = request.stopSequences;
+      payload['stop'] = request.stopSequences;
     }
 
     if (request.tools && request.tools.length > 0) {
-      payload.tools = request.tools.map((t) => ({
+      payload['tools'] = request.tools.map((t) => ({
         type: 'function',
         function: {
           name: t.name,
@@ -263,7 +300,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
     }
 
     if (request.structuredOutputSchema) {
-      payload.response_format = {
+      payload['response_format'] = {
         type: 'json_schema',
         json_schema: {
           name: request.structuredOutputSchema.name,
@@ -277,40 +314,52 @@ export class OpenAICompatibleProvider implements ModelProvider {
   }
 
   private parseResponse(
-    data: any,
+    data: unknown,
     request: ModelRequest,
     latencyMs: number,
   ): ModelResponse {
-    const choice = data.choices?.[0];
-    if (!choice) {
+    const validation = OpenAIResponseSchema.safeParse(data);
+    if (!validation.success) {
       throw new HarnessError({
-        code: ErrorCode.MODEL_INVALID_RESPONSE,
+        code: ErrorCode.MODEL_MALFORMED_OUTPUT,
         category: ErrorCategory.MODEL,
-        message: `[${this.providerId}] Response contained no choices`,
-        context: { data },
+        message: `[${this.providerId}] Malformed model response structure: ${validation.error.issues.map((i) => i.message).join(', ')}`,
+        context: { errors: validation.error.issues },
       });
     }
 
-    const message = choice.message ?? {};
+    const responseData = validation.data;
+    const choice = responseData.choices[0]!;
+    const message = choice.message;
     const content = message.content ?? '';
 
-    // Tool calls
-    const toolCalls: ToolCall[] = (message.tool_calls ?? []).map((tc: any) => {
-      let args: Record<string, unknown> = {};
-      try {
-        args = typeof tc.function?.arguments === 'string'
-          ? JSON.parse(tc.function.arguments)
-          : tc.function?.arguments ?? {};
-      } catch {
-        args = { raw: tc.function?.arguments };
-      }
+    // Tool calls validation
+    const toolCalls: ToolCall[] = [];
+    if (message.tool_calls) {
+      for (const tc of message.tool_calls) {
+        let args: Record<string, unknown> = {};
+        if (typeof tc.function.arguments === 'string') {
+          try {
+            args = JSON.parse(tc.function.arguments);
+          } catch (err) {
+            throw new HarnessError({
+              code: ErrorCode.MODEL_MALFORMED_OUTPUT,
+              category: ErrorCategory.MODEL,
+              message: `[${this.providerId}] Malformed tool call arguments JSON for tool [${tc.function.name}]: ${err instanceof Error ? err.message : String(err)}`,
+              context: { rawArguments: tc.function.arguments },
+            });
+          }
+        } else if (typeof tc.function.arguments === 'object' && tc.function.arguments !== null) {
+          args = tc.function.arguments as Record<string, unknown>;
+        }
 
-      return {
-        id: tc.id ?? `call_${Math.random().toString(36).substring(2, 7)}`,
-        name: tc.function?.name ?? 'unknown_tool',
-        input: args,
-      };
-    });
+        toolCalls.push({
+          id: tc.id ?? `call_${Math.random().toString(36).substring(2, 7)}`,
+          name: tc.function.name,
+          input: args,
+        });
+      }
+    }
 
     // Structured Output
     let structuredOutput: Record<string, unknown> | undefined;
@@ -323,7 +372,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
     }
 
     // Usage
-    const usageObj = data.usage ?? {};
+    const usageObj = responseData.usage ?? {};
     const usage: TokenUsage = {
       inputTokens: usageObj.prompt_tokens ?? 0,
       outputTokens: usageObj.completion_tokens ?? 0,
@@ -335,11 +384,11 @@ export class OpenAICompatibleProvider implements ModelProvider {
       (usage.inputTokens / 1000) * this.descriptor.costPer1kInputTokensDollars +
       (usage.outputTokens / 1000) * this.descriptor.costPer1kOutputTokensDollars;
 
-    const finishReason = mapFinishReason(choice.finish_reason);
+    const finishReason = mapFinishReason(choice.finish_reason ?? undefined);
 
     return {
-      requestId: data.id ?? `req_${Date.now()}`,
-      modelId: data.model ?? request.modelId ?? this.defaultModelId,
+      requestId: responseData.id ?? `req_${Date.now()}`,
+      modelId: responseData.model ?? request.modelId ?? this.defaultModelId,
       providerId: this.providerId,
       content,
       structuredOutput,
@@ -407,37 +456,56 @@ function mapFinishReason(rawReason?: string): FinishReason {
   }
 }
 
-function mapFetchError(err: unknown, providerId: string): HarnessError {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (msg.includes('aborted') || msg.includes('cancel')) {
+function mapHttpStatusToError(
+  status: number,
+  bodyText: string,
+  providerId: string,
+): HarnessError {
+  if (status === 429) {
+    return new HarnessError({
+      code: ErrorCode.MODEL_RATE_LIMITED,
+      category: ErrorCategory.MODEL,
+      message: `[${providerId}] Rate limit exceeded (HTTP 429): ${bodyText}`,
+      context: { status, bodyText },
+    });
+  }
+  if (status === 504 || status === 408) {
+    return new HarnessError({
+      code: ErrorCode.MODEL_TIMEOUT,
+      category: ErrorCategory.MODEL,
+      message: `[${providerId}] Gateway timeout (HTTP ${status}): ${bodyText}`,
+      context: { status, bodyText },
+    });
+  }
+  if (status >= 500) {
     return new HarnessError({
       code: ErrorCode.MODEL_UNAVAILABLE,
       category: ErrorCategory.MODEL,
-      message: `[${providerId}] Request was cancelled or aborted`,
+      message: `[${providerId}] Provider server error (HTTP ${status}): ${bodyText}`,
+      context: { status, bodyText },
     });
   }
   return new HarnessError({
-    code: ErrorCode.INFRA_CONNECTION_FAILED,
-    category: ErrorCategory.INFRASTRUCTURE,
-    message: `[${providerId}] Connection failed: ${msg}`,
-    cause: err instanceof Error ? err : undefined,
+    code: ErrorCode.MODEL_INVALID_RESPONSE,
+    category: ErrorCategory.MODEL,
+    message: `[${providerId}] HTTP ${status}: ${bodyText}`,
+    context: { status, bodyText },
   });
 }
 
-function mapHttpStatusToError(status: number, body: string, providerId: string): HarnessError {
-  let code = ErrorCode.MODEL_INVALID_RESPONSE;
-  if (status === 429) {
-    code = ErrorCode.MODEL_RATE_LIMITED;
-  } else if (status === 408 || status === 504) {
-    code = ErrorCode.MODEL_TIMEOUT;
-  } else if (status >= 500 || status === 401 || status === 403) {
-    code = ErrorCode.MODEL_UNAVAILABLE;
+function mapFetchError(err: unknown, providerId: string): HarnessError {
+  if (err instanceof Error && err.name === 'AbortError') {
+    return new HarnessError({
+      code: ErrorCode.MODEL_TIMEOUT,
+      category: ErrorCategory.MODEL,
+      message: `[${providerId}] Execution aborted or timed out`,
+      context: { error: err.message },
+    });
   }
-
   return new HarnessError({
-    code,
+    code: ErrorCode.MODEL_UNAVAILABLE,
     category: ErrorCategory.MODEL,
-    message: `[${providerId}] HTTP ${status}: ${body.slice(0, 200)}`,
-    context: { status, body },
+    message: `[${providerId}] Network fetch failed: ${err instanceof Error ? err.message : String(err)}`,
+    context: { error: err },
   });
 }

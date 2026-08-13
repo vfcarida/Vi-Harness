@@ -37,11 +37,11 @@ const PACKAGE_INSTALL_PATTERNS = [
 ];
 
 const PRODUCTION_IMPACTING_PATTERNS = [
-  /prod(uction)?\.config/i,
+  /prod(uction)?/i,
   /deploy(ment)?/i,
   /migrations?\/prod/i,
   /\bhelm\s+upgrade\b/i,
-  /\bkube-ctl\b/i,
+  /\bkubectl\b/i,
 ];
 
 export class RiskClassifier {
@@ -50,12 +50,16 @@ export class RiskClassifier {
    */
   static classify(action: PolicyAction): ReadonlyArray<ActionRiskCategory> {
     const categories = new Set<ActionRiskCategory>();
-    const resource = (action.resource ?? '').toLowerCase();
+    const metaPath = String(action.metadata?.['path'] ?? '');
+    const metaCmd = String(action.metadata?.['cmd'] ?? action.metadata?.['command'] ?? '');
+    const metaUrl = String(action.metadata?.['url'] ?? '');
+    const resource = (action.resource ?? metaPath ?? metaCmd ?? metaUrl).toLowerCase();
     const type = String(action.type ?? '').toLowerCase();
+    const fullText = `${resource} ${metaPath} ${metaCmd} ${metaUrl}`.toLowerCase();
 
     // 1. Credentials Check
     for (const pattern of CREDENTIAL_RESOURCE_PATTERNS) {
-      if (pattern.test(resource) || pattern.test(type)) {
+      if (pattern.test(resource) || pattern.test(type) || pattern.test(fullText)) {
         categories.add(ActionRiskCategory.CREDENTIALS);
         break;
       }
@@ -63,7 +67,7 @@ export class RiskClassifier {
 
     // 2. Destructive Actions Check
     for (const pattern of DESTRUCTIVE_PATTERNS) {
-      if (pattern.test(resource) || type.includes('delete') || type.includes('drop')) {
+      if (pattern.test(resource) || pattern.test(fullText) || type.includes('delete') || type.includes('drop')) {
         categories.add(ActionRiskCategory.DESTRUCTIVE);
         break;
       }
@@ -71,7 +75,7 @@ export class RiskClassifier {
 
     // 3. Package Installation Check
     for (const pattern of PACKAGE_INSTALL_PATTERNS) {
-      if (pattern.test(resource)) {
+      if (pattern.test(resource) || pattern.test(fullText)) {
         categories.add(ActionRiskCategory.PACKAGE_INSTALLATION);
         break;
       }
@@ -79,7 +83,7 @@ export class RiskClassifier {
 
     // 4. Production Impacting Check
     for (const pattern of PRODUCTION_IMPACTING_PATTERNS) {
-      if (pattern.test(resource)) {
+      if (pattern.test(resource) || pattern.test(fullText)) {
         categories.add(ActionRiskCategory.PRODUCTION_IMPACTING);
         break;
       }

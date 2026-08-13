@@ -6,7 +6,7 @@
  * - Policy Engine integration (DENY / ALLOW checks)
  * - Command normalization for EXECUTE tools
  * - Timeout enforcement & AbortSignal cancellation
- * - Correlation tracking & structured error mapping
+ * - Correlation tracking & structured metadata mapping
  */
 import type { ToolExecutor, ToolExecutionRequest } from '../../core/interfaces/tool-executor.js';
 import type { ToolRegistry } from '../../core/interfaces/tool-registry.js';
@@ -71,15 +71,28 @@ export class DefaultToolExecutor implements ToolExecutor {
 
     const correlationId =
       request.context?.correlationId ?? this.idFactory.create<'Trace'>();
+    const timeoutMs = request.context?.timeoutMs ?? tool.definition.defaultTimeoutMs;
 
     const fullContext: ToolExecutionContext = {
       correlationId,
       taskId: request.context?.taskId,
       iterationId: request.context?.iterationId,
       signal: request.context?.signal,
-      timeoutMs: request.context?.timeoutMs ?? tool.definition.defaultTimeoutMs,
+      timeoutMs,
       workingDirectory: request.context?.workingDirectory,
       environment: request.context?.environment,
+    };
+
+    const baseMetadata: Record<string, unknown> = {
+      correlationId,
+      toolName: tool.definition.name,
+      version: tool.definition.version,
+      inputSchema: tool.definition.inputSchema,
+      validatedInput: request.input,
+      timeoutMs,
+      riskLevel: tool.definition.riskLevel,
+      mutating: tool.definition.mutating,
+      idempotent: tool.definition.idempotent,
     };
 
     // 1. Schema Validation
@@ -101,17 +114,44 @@ export class DefaultToolExecutor implements ToolExecutor {
         success: false,
         durationMs: Date.now() - startTime,
         error: 'Execution cancelled via AbortSignal',
-        metadata: { correlationId },
+        metadata: baseMetadata,
       };
     }
 
-    // 3. Policy Engine Evaluation
-    if (request.requiresPolicy && this.policyEngine) {
+    // 3. Policy Engine Evaluation (Unbypassable for Security-Critical Operations)
+    const isSecurityCritical =
+      tool.definition.mutating ||
+      tool.definition.irreversible === true ||
+      tool.definition.category === 'EXECUTE' ||
+      tool.definition.category === 'DESTRUCTIVE' ||
+      tool.definition.requiresNetwork === true ||
+      tool.definition.riskLevel === 'HIGH' ||
+      tool.definition.riskLevel === 'CRITICAL' ||
+      tool.definition.filesystemScope === 'system' ||
+      request.requiresPolicy !== false;
+
+    if (this.policyEngine && isSecurityCritical) {
+      const actionResource = String(
+        request.input['path'] ??
+        request.input['cmd'] ??
+        request.input['command'] ??
+        request.input['url'] ??
+        tool.definition.name,
+      );
+
       const action = {
         type: tool.definition.category,
-        resource: tool.definition.name,
-        metadata: request.input,
-        irreversible: tool.definition.riskLevel === 'HIGH' || tool.definition.riskLevel === 'CRITICAL',
+        resource: actionResource,
+        metadata: {
+          ...request.input,
+          toolName: tool.definition.name,
+          path: request.input['path'],
+          cmd: request.input['cmd'] ?? request.input['command'],
+          url: request.input['url'],
+        },
+        irreversible:
+          tool.definition.irreversible ??
+          (tool.definition.riskLevel === 'HIGH' || tool.definition.riskLevel === 'CRITICAL'),
       };
 
       const evaluation = await this.policyEngine.evaluate(action);
@@ -124,14 +164,27 @@ export class DefaultToolExecutor implements ToolExecutor {
           success: false,
           durationMs: Date.now() - startTime,
           error: `Policy DENIED tool execution: ${evaluation.reason}`,
-          metadata: { correlationId },
+          metadata: { ...baseMetadata, ruleId: evaluation.ruleId, decision: evaluation.decision },
+        };
+      }
+
+      if (
+        evaluation.decision === PolicyDecisionType.REQUIRE_APPROVAL ||
+        evaluation.decision === PolicyDecisionType.ESCALATE
+      ) {
+        return {
+          toolCallId: this.idFactory.create<'ToolCall'>(),
+          name: tool.definition.name,
+          output: '',
+          success: false,
+          durationMs: Date.now() - startTime,
+          error: `Policy REQUIRES_APPROVAL for tool execution: ${evaluation.reason}`,
+          metadata: { ...baseMetadata, ruleId: evaluation.ruleId, decision: evaluation.decision },
         };
       }
     }
 
     // 4. Timeout Enforcement & Execution
-    const timeoutMs = fullContext.timeoutMs ?? tool.definition.defaultTimeoutMs;
-
     try {
       const executionPromise = tool.execute(request.input, fullContext);
 
@@ -158,7 +211,15 @@ export class DefaultToolExecutor implements ToolExecutor {
         });
       });
 
-      return await Promise.race([executionPromise, timeoutPromise]);
+      const res = await Promise.race([executionPromise, timeoutPromise]);
+      return {
+        ...res,
+        durationMs: res.durationMs || (Date.now() - startTime),
+        metadata: {
+          ...baseMetadata,
+          ...(res.metadata ?? {}),
+        },
+      };
     } catch (err) {
       const durationMs = Date.now() - startTime;
       if (err instanceof HarnessError) throw err;
@@ -170,7 +231,7 @@ export class DefaultToolExecutor implements ToolExecutor {
         success: false,
         durationMs,
         error: err instanceof Error ? err.message : String(err),
-        metadata: { correlationId },
+        metadata: baseMetadata,
       };
     }
   }

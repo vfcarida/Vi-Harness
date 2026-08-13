@@ -18,6 +18,7 @@
  */
 import type { GoalConstraints } from '../model/goal.js';
 import type { Iteration, IterationFingerprint } from '../model/iteration.js';
+import { AgentPhase } from '../model/state.js';
 import type { AgentState, StateTransition } from '../model/state.js';
 import {
   TerminationReason,
@@ -75,6 +76,17 @@ export function evaluateLoopControl(params: {
   config?: LoopControlConfig;
 }): TerminationDecision {
   const config = params.config ?? DEFAULT_LOOP_CONTROL_CONFIG;
+
+  // --- 0. Task Completion ---
+  if (params.state.phase === AgentPhase.DONE) {
+    return terminate({
+      reason: TerminationReason.SUCCESS,
+      evidenceIds: [],
+      confidence: 1.0,
+      humanRequired: false,
+      recommendedAction: 'Task completed successfully',
+    });
+  }
 
   // --- 1. Maximum iterations ---
   const iterCheck = checkMaxIterations(

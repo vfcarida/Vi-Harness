@@ -36,6 +36,7 @@ export enum ErrorCode {
   MODEL_TIMEOUT = 'MODEL_TIMEOUT',
   MODEL_RATE_LIMITED = 'MODEL_RATE_LIMITED',
   MODEL_INVALID_RESPONSE = 'MODEL_INVALID_RESPONSE',
+  MODEL_MALFORMED_OUTPUT = 'MODEL_MALFORMED_OUTPUT',
 
   // Tool
   TOOL_NOT_FOUND = 'TOOL_NOT_FOUND',
@@ -81,6 +82,7 @@ export const ERROR_CODE_CATEGORY: Readonly<Record<ErrorCode, ErrorCategory>> = {
   [ErrorCode.MODEL_TIMEOUT]: ErrorCategory.MODEL,
   [ErrorCode.MODEL_RATE_LIMITED]: ErrorCategory.MODEL,
   [ErrorCode.MODEL_INVALID_RESPONSE]: ErrorCategory.MODEL,
+  [ErrorCode.MODEL_MALFORMED_OUTPUT]: ErrorCategory.MODEL,
 
   [ErrorCode.TOOL_NOT_FOUND]: ErrorCategory.TOOL,
   [ErrorCode.TOOL_EXECUTION_FAILED]: ErrorCategory.TOOL,

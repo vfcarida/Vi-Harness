@@ -26,6 +26,7 @@ export enum ActionType {
   MODEL_CALL = 'MODEL_CALL',
   HUMAN_ASK = 'HUMAN_ASK',
   SUBAGENT_SPAWN = 'SUBAGENT_SPAWN',
+  TOOL_CALL = 'TOOL_CALL',
 }
 
 // ---------------------------------------------------------------------------

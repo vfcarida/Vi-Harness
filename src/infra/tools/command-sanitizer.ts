@@ -9,7 +9,7 @@
 const FORBIDDEN_COMMAND_PATTERNS = [
   /\bsudo\b/i,
   /\bsu\s+/i,
-  /\brm\s+-rf\s+[\/\*~]/i,
+  /\brm\s+-rf\s+[/~*]/i,
   /\bmkfs\b/i,
   /\bdd\s+if=/i,
   /\bfdisk\b/i,

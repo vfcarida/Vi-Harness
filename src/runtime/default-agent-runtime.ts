@@ -25,7 +25,7 @@ import type { Goal } from '../core/model/goal.js';
 import type { Task } from '../core/model/task.js';
 import { TaskStatus } from '../core/model/task.js';
 import { StateMachine } from '../core/state-machine/state-machine.js';
-import { AgentPhase, StateEvent } from '../core/model/state.js';
+import { AgentPhase } from '../core/model/state.js';
 import type {
   ExecutionOptions,
   ExecutionResult,
@@ -36,8 +36,10 @@ import { AgentEventType } from '../core/model/runtime-types.js';
 
 import { AgentObserverHub } from './agent-observer.js';
 import { IterationExecutor } from './iteration-executor.js';
+import { DefaultVerificationEngine } from '../infra/verification/default-verification-engine.js';
 import { HarnessError } from '../core/errors/base-error.js';
 import { ErrorCode, ErrorCategory } from '../core/errors/error-codes.js';
+import { TerminationReason } from '../core/model/termination.js';
 
 export interface DefaultAgentRuntimeOptions {
   readonly router: ModelRouter;
@@ -55,7 +57,7 @@ interface ActiveExecution {
   readonly executionId: ExecutionId;
   readonly goal: Goal;
   readonly task: Task;
-  readonly stateMachine: StateMachine;
+  stateMachine: StateMachine;
   readonly startTimeMs: number;
   readonly observerHub: AgentObserverHub;
   status: AgentExecutionStatus;
@@ -71,7 +73,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
   private readonly compiler: ContextCompiler;
   private readonly policyEngine?: PolicyEngine;
   private readonly toolExecutor?: ToolExecutor;
-  private readonly verificationEngine?: VerificationEngine;
+  private readonly verificationEngine: VerificationEngine;
   private readonly evidenceStore?: EvidenceStore;
   private readonly checkpointStore?: CheckpointStore;
   private readonly idFactory: IdFactory;
@@ -85,7 +87,13 @@ export class DefaultAgentRuntime implements AgentRuntime {
     this.compiler = options.compiler;
     this.policyEngine = options.policyEngine;
     this.toolExecutor = options.toolExecutor;
-    this.verificationEngine = options.verificationEngine;
+    this.verificationEngine =
+      options.verificationEngine ??
+      new DefaultVerificationEngine({
+        idFactory: options.idFactory,
+        clock: options.clock,
+        evidenceStore: options.evidenceStore,
+      });
     this.evidenceStore = options.evidenceStore;
     this.checkpointStore = options.checkpointStore;
     this.idFactory = options.idFactory;
@@ -122,7 +130,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
       goal,
       task,
       stateMachine,
-      startTimeMs: Date.now(),
+      startTimeMs: this.clock.now().getTime(),
       observerHub: this.globalObserverHub,
       status: 'RUNNING',
       iterations: [],
@@ -192,7 +200,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
           clock: this.clock,
           initialPhase: restoredState.phase,
         });
-        (execution as any).stateMachine = restoredMachine;
+        execution.stateMachine = restoredMachine;
       }
     }
 
@@ -204,64 +212,51 @@ export class DefaultAgentRuntime implements AgentRuntime {
       executionId,
       taskId: execution.task.id,
       timestamp: this.clock.now(),
-      data: { checkpointId: options?.checkpointId },
+      data: {},
     });
 
     return this.runLoop(execution, options);
   }
 
-  async abort(executionId: ExecutionId): Promise<void> {
+  async cancel(executionId: ExecutionId, reason?: string): Promise<void> {
     const execution = this.activeExecutions.get(executionId);
-    if (execution) {
-      execution.status = 'CANCELLED';
-      execution.abortController.abort();
-
-      if (execution.stateMachine.phase !== AgentPhase.CANCELLED && !execution.stateMachine.isTerminal) {
-        try {
-          execution.stateMachine.apply(StateEvent.CANCEL);
-        } catch {
-          // Ignore if transition illegal
-        }
-      }
-
-      this.globalObserverHub.emit({
-        type: AgentEventType.AgentCancelled,
-        executionId,
-        taskId: execution.task.id,
-        timestamp: this.clock.now(),
-        data: {},
+    if (!execution) {
+      throw new HarnessError({
+        code: ErrorCode.STATE_INVALID_TRANSITION,
+        category: ErrorCategory.STATE,
+        message: `Execution not found to cancel: ${executionId}`,
       });
     }
+
+    execution.status = 'CANCELLED';
+    execution.abortController.abort();
+
+    this.globalObserverHub.emit({
+      type: AgentEventType.AgentCancelled,
+      executionId,
+      taskId: execution.task.id,
+      timestamp: this.clock.now(),
+      data: { reason: reason ?? 'User cancelled execution' },
+    });
+  }
+
+  async abort(executionId: ExecutionId): Promise<void> {
+    return this.cancel(executionId);
   }
 
   private async runLoop(
     execution: ActiveExecution,
     options?: ExecutionOptions,
   ): Promise<ExecutionResult> {
-    const { goal, task, stateMachine, observerHub, executionId } = execution;
+    const { executionId, goal, task, stateMachine, observerHub } = execution;
 
-    // Iterative non-recursive loop
-    while (execution.status === 'RUNNING') {
-      // Cancellation check
-      if (options?.signal?.aborted || execution.abortController.signal.aborted) {
+    while (
+      execution.status === 'RUNNING' &&
+      !stateMachine.isTerminal &&
+      (stateMachine.phase as AgentPhase) !== AgentPhase.DONE
+    ) {
+      if (execution.abortController.signal.aborted || options?.signal?.aborted) {
         execution.status = 'CANCELLED';
-        break;
-      }
-
-      // Terminal state check
-      if (stateMachine.isTerminal) {
-        if (stateMachine.phase === AgentPhase.DONE) {
-          execution.status = 'COMPLETED';
-        } else if (stateMachine.phase === AgentPhase.CANCELLED) {
-          execution.status = 'CANCELLED';
-        } else {
-          execution.status = 'FAILED';
-        }
-        break;
-      }
-
-      if (stateMachine.phase === AgentPhase.HUMAN_REQUIRED) {
-        execution.status = 'AWAITING_HUMAN';
         break;
       }
 
@@ -288,11 +283,26 @@ export class DefaultAgentRuntime implements AgentRuntime {
 
         execution.iterations.push(iterationRecord);
         execution.totalCostDollars += iterationRecord.costDollars;
-        execution.totalTokens += iterationRecord.tokenUsage.totalTokens;
+        execution.totalTokens +=
+          iterationRecord.tokenUsage.inputTokens + iterationRecord.tokenUsage.outputTokens;
 
-        // Check loop control termination decision
-        if (iterationRecord.terminationDecision.terminal) {
-          if (iterationRecord.terminationDecision.humanRequired) {
+        // Save automatic checkpoint if CheckpointStore is provided
+        if (this.checkpointStore && iterationRecord.sequenceNumber % 5 === 0) {
+          const cp = await this.checkpointStore.create(
+            stateMachine.state,
+            `auto-checkpoint-iter-${iterationRecord.sequenceNumber}`,
+          );
+          execution.latestCheckpointId = cp.id;
+        }
+
+        // Handle termination decision
+        if (iterationRecord.terminationDecision.terminal || (stateMachine.phase as AgentPhase) === AgentPhase.DONE) {
+          if (
+            iterationRecord.terminationDecision.reason === TerminationReason.SUCCESS ||
+            (stateMachine.phase as AgentPhase) === AgentPhase.DONE
+          ) {
+            execution.status = 'COMPLETED';
+          } else if (iterationRecord.terminationDecision.humanRequired) {
             execution.status = 'AWAITING_HUMAN';
           } else {
             execution.status = 'FAILED';
@@ -300,20 +310,20 @@ export class DefaultAgentRuntime implements AgentRuntime {
           break;
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
+        const errorMessage = err instanceof Error ? err.message : String(err);
         observerHub.emit({
           type: AgentEventType.AgentFailed,
           executionId,
-          taskId: task.id,
+          taskId: execution.task.id,
           timestamp: this.clock.now(),
-          data: { error: errorMsg },
+          data: { error: errorMessage, phase: stateMachine.phase },
         });
         execution.status = 'FAILED';
         break;
       }
     }
 
-    const durationMs = Date.now() - execution.startTimeMs;
+    const durationMs = this.clock.now().getTime() - execution.startTimeMs;
     const success = execution.status === 'COMPLETED';
 
     const summary = success
@@ -329,24 +339,29 @@ export class DefaultAgentRuntime implements AgentRuntime {
     observerHub.emit({
       type: finalEventType,
       executionId,
-      taskId: task.id,
+      taskId: execution.task.id,
       timestamp: this.clock.now(),
-      data: { success, status: execution.status, durationMs },
+      data: {
+        status: execution.status,
+        phase: stateMachine.phase,
+        totalCostDollars: execution.totalCostDollars,
+        totalTokens: execution.totalTokens,
+        iterationsCount: execution.iterations.length,
+      },
     });
 
     return {
       executionId,
+      taskId: execution.task.id,
       goalId: goal.id,
-      taskId: task.id,
       success,
       status: execution.status,
-      summary,
       iterationCount: execution.iterations.length,
-      durationMs,
       totalCostDollars: execution.totalCostDollars,
       totalTokens: execution.totalTokens,
+      durationMs,
       iterations: execution.iterations,
-      checkpointId: execution.latestCheckpointId,
+      summary,
     };
   }
 }

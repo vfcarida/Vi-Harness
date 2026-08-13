@@ -33,7 +33,7 @@ export class PathRestrictionRule implements PolicyRule {
       };
     }
 
-    const rawPath = action.resource ?? '';
+    const rawPath = String(action.metadata?.['path'] ?? action.metadata?.['resource'] ?? action.resource ?? '');
 
     // 1. Check Path Traversal Tricks (e.g. '../', '%2e%2e', '..\\')
     let decodedPath = rawPath;

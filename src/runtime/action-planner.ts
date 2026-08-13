@@ -5,22 +5,27 @@
  *
  * Parses vendor-neutral ModelResponse content and tool calls into
  * explicit ActionProposal domain objects.
+ * Tool identity comes strictly from registered tool definitions — no heuristic string mapping.
  */
 import type { IdFactory } from '../core/types/identifiers.js';
 import type { TaskId, IterationId } from '../core/types/identifiers.js';
 import type { ModelResponse } from '../core/model/model-io.js';
 import type { ActionProposal } from '../core/model/action.js';
 import { ActionType } from '../core/model/action.js';
+import type { ToolRegistry } from '../core/interfaces/tool-registry.js';
+import { ToolCategory } from '../core/model/tool-types.js';
 
 export class ActionPlanner {
   /**
    * Parse a ModelResponse into structured ActionProposals.
+   * Derives action type and risk strictly from the tool registry definition.
    */
   static parseProposals(
     response: ModelResponse,
     taskId: TaskId,
     iterationId: IterationId,
     idFactory: IdFactory,
+    toolRegistry?: ToolRegistry,
   ): ReadonlyArray<ActionProposal> {
     const proposals: ActionProposal[] = [];
     const now = new Date();
@@ -28,8 +33,11 @@ export class ActionPlanner {
     // 1. Tool Call Proposals
     if (response.toolCalls && response.toolCalls.length > 0) {
       for (const tc of response.toolCalls) {
-        const actionType = mapToolNameToActionType(tc.name);
-        const irreversible = isIrreversibleAction(actionType, tc.input);
+        const tool = toolRegistry?.getTool(tc.name);
+        const actionType = tool ? mapCategoryToActionType(tool.definition.category) : ActionType.TOOL_CALL;
+        const irreversible = tool
+          ? tool.definition.mutating || tool.definition.riskLevel === 'HIGH' || tool.definition.riskLevel === 'CRITICAL'
+          : false;
 
         proposals.push({
           id: idFactory.create<'Action'>(),
@@ -60,47 +68,17 @@ export class ActionPlanner {
   }
 }
 
-function mapToolNameToActionType(toolName: string): ActionType {
-  const lower = toolName.toLowerCase();
-  if (lower.includes('write') || lower.includes('create') || lower.includes('edit')) {
-    return ActionType.FILE_WRITE;
+function mapCategoryToActionType(category: ToolCategory): ActionType {
+  switch (category) {
+    case ToolCategory.READ:
+      return ActionType.FILE_READ;
+    case ToolCategory.WRITE:
+      return ActionType.FILE_WRITE;
+    case ToolCategory.DESTRUCTIVE:
+      return ActionType.FILE_DELETE;
+    case ToolCategory.EXECUTE:
+      return ActionType.SHELL_EXECUTE;
+    default:
+      return ActionType.MODEL_CALL;
   }
-  if (lower.includes('read') || lower.includes('view') || lower.includes('cat')) {
-    return ActionType.FILE_READ;
-  }
-  if (lower.includes('delete') || lower.includes('remove') || lower.includes('rm')) {
-    return ActionType.FILE_DELETE;
-  }
-  if (lower.includes('shell') || lower.includes('exec') || lower.includes('run')) {
-    return ActionType.SHELL_EXECUTE;
-  }
-  if (lower.includes('test')) {
-    return ActionType.TEST_RUN;
-  }
-  if (lower.includes('lint')) {
-    return ActionType.LINT_RUN;
-  }
-  if (lower.includes('build')) {
-    return ActionType.BUILD_RUN;
-  }
-  if (lower.includes('git')) {
-    return lower.includes('commit') ? ActionType.GIT_COMMIT : ActionType.GIT_CHECKOUT;
-  }
-  if (lower.includes('ask') || lower.includes('human') || lower.includes('escalate')) {
-    return ActionType.HUMAN_ASK;
-  }
-  return ActionType.MODEL_CALL;
-}
-
-function isIrreversibleAction(type: ActionType, params: Record<string, unknown>): boolean {
-  if (type === ActionType.FILE_DELETE || type === ActionType.GIT_COMMIT) {
-    return true;
-  }
-  if (type === ActionType.SHELL_EXECUTE) {
-    const cmd = String(params['cmd'] ?? params['command'] ?? '').toLowerCase();
-    if (cmd.includes('rm ') || cmd.includes('push') || cmd.includes('deploy')) {
-      return true;
-    }
-  }
-  return false;
 }

@@ -1,16 +1,18 @@
 /**
  * Iteration Executor.
  *
- * Executes a single pass through the stateful, evidence-driven 13-step agent cycle:
+ * "The model proposes; the runtime decides."
+ *
+ * Executes a single pass through the stateful, evidence-driven agent cycle:
  * 1. Load durable state
  * 2. Compile context
  * 3. Select model via ModelRouter
  * 4. Invoke model via ModelProvider
  * 5. Parse response into ActionProposals
- * 6. Evaluate actions via PolicyEngine
- * 7. Execute approved tools via ToolExecutor
+ * 6. Evaluate actions via PolicyEngine (Deny-First)
+ * 7. Execute approved tools via ToolExecutor (No Fake Tools / Fallbacks)
  * 8. Collect tool results
- * 9. Verify outcomes via VerificationEngine
+ * 9. Verify outcomes via VerificationEngine (No Fake Pass Evidence)
  * 10. Record evidence via EvidenceStore
  * 11. Update state via StateMachine
  * 12. Evaluate termination criteria via TerminationController
@@ -22,8 +24,6 @@ import type { ModelRouter } from '../core/interfaces/model-router.js';
 import type { ContextCompiler } from '../core/interfaces/context-compiler.js';
 import type { PolicyEngine } from '../core/interfaces/policy-engine.js';
 import type { ToolExecutor } from '../core/interfaces/tool-executor.js';
-import type { Tool } from '../core/interfaces/tool.js';
-import { ToolCategory, ToolRiskLevel } from '../core/model/tool-types.js';
 import type { VerificationEngine } from '../core/interfaces/verification-engine.js';
 import type { EvidenceStore } from '../core/interfaces/evidence-store.js';
 import type { Goal } from '../core/model/goal.js';
@@ -39,10 +39,13 @@ import { StateEvent, AgentPhase } from '../core/model/state.js';
 import { TaskCategory } from '../core/model/router-types.js';
 import type { Evidence } from '../core/model/evidence.js';
 import { EvidenceType, EvidenceOutcome } from '../core/model/evidence.js';
-import type { ActionResult } from '../core/model/action.js';
-import { ActionResultStatus } from '../core/model/action.js';
-import type { ModelRequest } from '../core/model/model-io.js';
+import type { ActionResult, ActionProposal } from '../core/model/action.js';
+import { ActionResultStatus, ActionType } from '../core/model/action.js';
+import type { ModelRequest, ModelMessage } from '../core/model/model-io.js';
 import { MessageRole } from '../core/model/model-io.js';
+import { PolicyDecisionType } from '../core/model/policy.js';
+import { IterationOutcome } from '../core/model/iteration.js';
+import { ContextTier } from '../core/model/context.js';
 
 export interface IterationExecutorParams {
   readonly executionId: ExecutionId;
@@ -96,7 +99,7 @@ export class IterationExecutor {
       data: { sequenceNumber, stateBefore },
     });
 
-    // Step 1: Load durable state (stateMachine.state)
+    // Step 1: Load durable state
     const currentState = stateMachine.state;
 
     // Step 2 & 3: Model Routing
@@ -138,15 +141,37 @@ export class IterationExecutor {
       },
     });
 
-    // Step 5: Model Completion
+    // Step 5: Model Completion — Structured Message Construction
+    const messages: ModelMessage[] = [];
+
+    if (compilationResult.compiledContext.entries.length > 0) {
+      for (const entry of compilationResult.compiledContext.entries) {
+        const roleStr = String(entry.metadata['role'] ?? '');
+        const role = (roleStr === 'system' || entry.tier === ContextTier.L3_REPOSITORY)
+          ? MessageRole.SYSTEM
+          : roleStr === 'assistant'
+          ? MessageRole.ASSISTANT
+          : roleStr === 'tool'
+          ? MessageRole.TOOL
+          : MessageRole.USER;
+
+        messages.push({
+          role,
+          content: entry.content,
+          toolCallId: entry.metadata['toolCallId'] ? String(entry.metadata['toolCallId']) : undefined,
+          name: entry.metadata['toolName'] ? String(entry.metadata['toolName']) : undefined,
+        });
+      }
+    } else {
+      messages.push({
+        role: MessageRole.USER,
+        content: goal.description,
+      });
+    }
+
     const modelRequest: ModelRequest = {
       modelId: routingDecision.selectedModelId,
-      messages: [
-        {
-          role: MessageRole.USER,
-          content: compilationResult.compiledContext.entries.map((e) => e.content).join('\n'),
-        },
-      ],
+      messages,
       signal: options?.signal,
     };
 
@@ -175,70 +200,58 @@ export class IterationExecutor {
       idFactory,
     );
 
-    const mainAction = actionProposals[0] ?? null;
-
-    if (mainAction) {
+    for (const proposal of actionProposals) {
       observerHub.emit({
         type: AgentEventType.ActionProposed,
         executionId,
         taskId: task.id,
         timestamp: clock.now(),
-        data: { action: mainAction },
+        data: { action: proposal },
       });
     }
 
-    // Step 7 & 8: Policy Evaluation & Tool Execution
+    // Step 7 & 8: Policy Evaluation & Multi-Tool Execution (Parallel Safe, Serial Mutating)
     const toolResults: ActionResult[] = [];
-    if (mainAction && params.toolExecutor) {
-      try {
-        const fallbackTool: Tool = {
-          definition: {
-            name: mainAction.description,
-            version: '1.0.0',
-            description: mainAction.description,
-            category: ToolCategory.EXECUTE,
-            riskLevel: ToolRiskLevel.LOW,
-            mutating: false,
-            idempotent: true,
-            defaultTimeoutMs: 5000,
-            requiredPermissions: [],
-            inputSchema: {},
-          },
-          execute: async () => ({
-            toolCallId: idFactory.create<'ToolCall'>(),
-            name: mainAction.description,
-            output: 'Success',
-            success: true,
-            durationMs: 10,
-          }),
-        };
 
-        const tool = params.toolExecutor.getTool(mainAction.description) ?? fallbackTool;
+    if (actionProposals.length > 0 && params.toolExecutor) {
+      const safeProposals: { proposal: ActionProposal; index: number }[] = [];
+      const mutatingProposals: { proposal: ActionProposal; index: number }[] = [];
 
-        const result = await params.toolExecutor.execute({
-          tool,
-          input: mainAction.parameters,
-          requiresPolicy: false,
-        });
+      for (let i = 0; i < actionProposals.length; i++) {
+        const prop = actionProposals[i]!;
+        if (prop.type === ActionType.MODEL_CALL) continue;
 
-        toolResults.push({
-          actionId: mainAction.id,
-          status: result.success ? ActionResultStatus.SUCCESS : ActionResultStatus.FAILURE,
-          output: result.output,
-          durationMs: result.durationMs,
-          executedAt: clock.now(),
-          metadata: result.metadata ?? {},
-        });
-      } catch (err) {
-        toolResults.push({
-          actionId: mainAction.id,
-          status: ActionResultStatus.FAILURE,
-          output: '',
-          durationMs: 10,
-          error: err instanceof Error ? err.message : String(err),
-          executedAt: clock.now(),
-          metadata: {},
-        });
+        const toolName = String(
+          prop.parameters['toolName'] ??
+          prop.description.replace(/^Execute tool \[([^\]]+)\]$/, '$1'),
+        );
+        const tool = params.toolExecutor.getTool(toolName);
+
+        if (tool && !tool.definition.mutating) {
+          safeProposals.push({ proposal: prop, index: i });
+        } else {
+          mutatingProposals.push({ proposal: prop, index: i });
+        }
+      }
+
+      const proposalResults: ActionResult[] = new Array(actionProposals.length);
+
+      // Execute safe read-only tools concurrently
+      await Promise.all(
+        safeProposals.map(async ({ proposal, index }) => {
+          const res = await executeSingleProposal(proposal, params, clock);
+          proposalResults[index] = res;
+        }),
+      );
+
+      // Execute mutating tools serially in sequence
+      for (const { proposal, index } of mutatingProposals) {
+        const res = await executeSingleProposal(proposal, params, clock);
+        proposalResults[index] = res;
+      }
+
+      for (const res of proposalResults) {
+        if (res) toolResults.push(res);
       }
     }
 
@@ -270,18 +283,17 @@ export class IterationExecutor {
         await params.evidenceStore.record(ev);
       }
     } else {
-      // Default verification evidence if verificationEngine omitted
-      const defaultPass = stateBefore !== AgentPhase.REPAIR;
+      // Rule 3: Missing verification MUST NOT become PASS. Synthetic success is prohibited.
       const ev: Evidence = {
         id: idFactory.create<'Evidence'>(),
         taskId: task.id,
         type: EvidenceType.VERIFICATION,
-        outcome: defaultPass ? EvidenceOutcome.PASS : EvidenceOutcome.FAIL,
-        summary: defaultPass ? 'Passes baseline checks' : 'Repair check iteration',
-        data: {},
+        outcome: EvidenceOutcome.INCONCLUSIVE,
+        summary: 'VERIFICATION_UNAVAILABLE: Verification engine not configured',
+        data: { status: 'UNAVAILABLE' },
         createdAt: now,
-        pass: defaultPass,
-        confidence: 0.9,
+        pass: false, // MUST NOT BE PASS
+        confidence: 0.0,
         affectedFiles: [],
       };
       evidenceCreated.push(ev);
@@ -289,7 +301,10 @@ export class IterationExecutor {
 
     // Step 11: State Machine Transition
     const hasFailingEvidence = evidenceCreated.some((e) => !e.pass);
-    const hasFailingTool = toolResults.some((t) => t.status === ActionResultStatus.FAILURE);
+    const hasPassedEvidence = evidenceCreated.some((e) => e.pass);
+    const hasFailingTool = toolResults.some(
+      (t) => t.status === ActionResultStatus.FAILURE || t.status === ActionResultStatus.DENIED
+    );
 
     let nextEvent = StateEvent.VERIFICATION_PASSED;
 
@@ -300,11 +315,11 @@ export class IterationExecutor {
     } else if (stateBefore === AgentPhase.PLAN) {
       nextEvent = StateEvent.PLAN_READY;
     } else if (stateBefore === AgentPhase.IMPLEMENT) {
-      nextEvent = StateEvent.IMPLEMENTATION_COMPLETE;
+      nextEvent = hasFailingTool ? StateEvent.VERIFICATION_FAILED : StateEvent.IMPLEMENTATION_COMPLETE;
     } else if (stateBefore === AgentPhase.VERIFY) {
-      nextEvent = hasFailingEvidence ? StateEvent.VERIFICATION_FAILED : StateEvent.VERIFICATION_PASSED;
+      nextEvent = hasFailingEvidence || !hasPassedEvidence ? StateEvent.VERIFICATION_FAILED : StateEvent.VERIFICATION_PASSED;
     } else if (stateBefore === AgentPhase.REPAIR) {
-      nextEvent = hasFailingTool || hasFailingEvidence ? StateEvent.VERIFICATION_FAILED : StateEvent.REPAIR_COMPLETE;
+      nextEvent = hasFailingTool || hasFailingEvidence || !hasPassedEvidence ? StateEvent.VERIFICATION_FAILED : StateEvent.REPAIR_COMPLETE;
     }
 
     if (stateMachine.phase !== AgentPhase.DONE && !stateMachine.isTerminal) {
@@ -331,21 +346,26 @@ export class IterationExecutor {
     });
 
     // Step 12: Stop Condition Evaluation
-    const elapsedMs = Date.now() - startTimeMs;
+    const elapsedMs = clock.now().getTime() - startTimeMs;
     const currentCost = totalCostDollars + modelResponse.estimatedCostDollars;
+    const failingEvidenceIds = evidenceCreated.filter((e) => !e.pass).map((e) => e.id);
+
+    const iterationOutcome = hasFailingEvidence || hasFailingTool
+      ? IterationOutcome.VERIFICATION_FAILED
+      : (hasPassedEvidence ? IterationOutcome.VERIFICATION_PASSED : IterationOutcome.PROGRESS);
 
     // Map iteration records to Iteration model
     const iterationModels = iterationsSoFar.map((rec) => ({
       id: rec.iterationId,
       taskId: task.id,
       sequenceNumber: rec.sequenceNumber,
-      outcome: 0 as any,
+      outcome: iterationOutcome,
       fingerprint: {
         filesModified: [],
         hypothesisId: null,
         errorSignature: hasFailingEvidence ? 'ERR_VERIFICATION' : null,
         patchSignature: null,
-        failingTests: hasFailingEvidence ? ['failing_test'] : [],
+        failingTests: failingEvidenceIds,
         phaseAtStart: rec.stateBefore,
       },
       evidenceIds: rec.evidenceCreated.map((e) => e.id),
@@ -361,13 +381,13 @@ export class IterationExecutor {
       id: iterationId,
       taskId: task.id,
       sequenceNumber,
-      outcome: 0 as any,
+      outcome: iterationOutcome,
       fingerprint: {
         filesModified: [],
         hypothesisId: null,
         errorSignature: hasFailingEvidence ? 'ERR_VERIFICATION' : null,
         patchSignature: null,
-        failingTests: hasFailingEvidence ? ['failing_test'] : [],
+        failingTests: failingEvidenceIds,
         phaseAtStart: stateBefore,
       },
       evidenceIds: evidenceCreated.map((e) => e.id),
@@ -399,7 +419,7 @@ export class IterationExecutor {
       stateAfter,
       modelId: routingDecision.selectedModelId,
       providerId: routingDecision.selectedProvider.providerId,
-      actionProposed: mainAction,
+      actionProposed: actionProposals[0] ?? null,
       toolResults,
       evidenceCreated,
       tokenUsage: modelResponse.usage,
@@ -416,5 +436,79 @@ export class IterationExecutor {
     });
 
     return iterationRecord;
+  }
+}
+
+async function executeSingleProposal(
+  proposal: ActionProposal,
+  params: IterationExecutorParams,
+  clock: Clock,
+): Promise<ActionResult> {
+  const toolName = String(
+    proposal.parameters['toolName'] ??
+    proposal.description.replace(/^Execute tool \[([^\]]+)\]$/, '$1'),
+  );
+  const input = (proposal.parameters['input'] as Record<string, unknown>) ?? proposal.parameters;
+  const tool = params.toolExecutor?.getTool(toolName);
+
+  if (!tool) {
+    return {
+      actionId: proposal.id,
+      status: ActionResultStatus.FAILURE,
+      output: '',
+      durationMs: 0,
+      error: `UNKNOWN_TOOL: Tool [${toolName}] is not registered in ToolRegistry`,
+      executedAt: clock.now(),
+      metadata: { toolName, outcome: 'UNKNOWN_TOOL' },
+    };
+  }
+
+  if (params.policyEngine) {
+    const action = {
+      type: tool.definition.category,
+      resource: tool.definition.name,
+      metadata: input,
+      irreversible: proposal.irreversible,
+    };
+    const evaluation = await params.policyEngine.evaluate(action);
+    if (evaluation.decision === PolicyDecisionType.DENY) {
+      return {
+        actionId: proposal.id,
+        status: ActionResultStatus.DENIED,
+        output: '',
+        durationMs: 0,
+        error: `POLICY_DENIED: Execution denied by rule [${evaluation.ruleId ?? 'default'}]`,
+        executedAt: clock.now(),
+        metadata: { ruleId: evaluation.ruleId, outcome: 'POLICY_DENIED' },
+      };
+    }
+  }
+
+  try {
+    const result = await params.toolExecutor!.execute({
+      tool,
+      input,
+      requiresPolicy: false,
+    });
+
+    return {
+      actionId: proposal.id,
+      status: result.success ? ActionResultStatus.SUCCESS : ActionResultStatus.FAILURE,
+      output: result.output,
+      durationMs: result.durationMs,
+      error: result.error,
+      executedAt: clock.now(),
+      metadata: result.metadata ?? {},
+    };
+  } catch (err) {
+    return {
+      actionId: proposal.id,
+      status: ActionResultStatus.FAILURE,
+      output: '',
+      durationMs: 0,
+      error: err instanceof Error ? err.message : String(err),
+      executedAt: clock.now(),
+      metadata: { toolName },
+    };
   }
 }

@@ -28,6 +28,8 @@ export enum ToolRiskLevel {
 // Tool Input & Definition
 // ---------------------------------------------------------------------------
 
+export type FilesystemScope = 'workspace' | 'read-only' | 'system' | 'none';
+
 export type ToolInput = Readonly<Record<string, unknown>>;
 
 export interface ToolDefinition {
@@ -48,6 +50,15 @@ export interface ToolDefinition {
 
   /** Whether execution modifies persistent state/files. */
   readonly mutating: boolean;
+
+  /** Whether execution is irreversible (e.g., deletion, push). */
+  readonly irreversible?: boolean;
+
+  /** Whether tool requires external network access. */
+  readonly requiresNetwork?: boolean;
+
+  /** Filesystem access scope ('workspace' | 'read-only' | 'system' | 'none'). */
+  readonly filesystemScope?: FilesystemScope;
 
   /** Whether multiple calls with identical input produce identical effects. */
   readonly idempotent: boolean;

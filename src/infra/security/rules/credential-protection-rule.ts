@@ -14,7 +14,7 @@ const SECRET_CONTENT_PATTERNS = [
   /sk-[a-zA-Z0-9\-_]{16,}/i, // OpenAI / API Keys
   /ghp_[a-zA-Z0-9]{30,}/i, // GitHub Personal Access Tokens
   /AKIA[0-9A-Z]{16}/i, // AWS Access Key IDs
-  /Bearer\s+[a-zA-Z0-9\-\._~\+\/]+=*/i, // Bearer Tokens
+  /Bearer\s+[a-zA-Z0-9\-._~+/]+=*/i, // Bearer Tokens
 ];
 
 export class CredentialProtectionRule implements PolicyRule {

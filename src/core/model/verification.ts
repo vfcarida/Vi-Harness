@@ -5,7 +5,7 @@
  * "The agent does not self-assess — it verifies through external signals."
  *
  * Defines VerificationProfiles (FAST, STANDARD, FULL, SECURITY, PRE_RELEASE),
- * status types, check definitions, suites, and structured verification results.
+ * status types, check definitions, suites, check executions, and structured verification results.
  */
 import type { EvidenceId, TaskId } from '../types/identifiers.js';
 
@@ -31,13 +31,14 @@ export enum VerificationStatus {
 }
 
 // ---------------------------------------------------------------------------
-// Verification Check & Suite Definitions
+// Verification Check & Execution Artifact Definitions
 // ---------------------------------------------------------------------------
 
 export interface VerificationCheck {
   readonly checkId: string;
   readonly name: string;
   readonly command: string;
+  readonly tool?: string;
   readonly category:
     | 'unit-test'
     | 'integration-test'
@@ -48,7 +49,27 @@ export interface VerificationCheck {
     | 'coverage'
     | 'performance';
   readonly scope: 'file' | 'module' | 'repository';
+  readonly timeoutMs?: number;
+  readonly expectedResult?: string;
   readonly affectedFiles?: ReadonlyArray<string>;
+}
+
+export interface VerificationCheckExecution {
+  readonly id: string;
+  readonly checkId: string;
+  readonly name: string;
+  readonly command: string;
+  readonly tool?: string;
+  readonly scope: string;
+  readonly timeoutMs: number;
+  readonly expectedResult: string;
+  readonly actualResult: string;
+  readonly stdoutArtifact: string;
+  readonly stderrArtifact: string;
+  readonly exitCode: number;
+  readonly durationMs: number;
+  readonly timestamp: Date;
+  readonly status: VerificationStatus;
 }
 
 export interface VerificationSuite {
@@ -74,6 +95,7 @@ export interface VerificationResult {
   readonly confidence: number;
   readonly scope: string;
   readonly affectedFiles: ReadonlyArray<string>;
+  readonly checkExecutions?: ReadonlyArray<VerificationCheckExecution>;
   readonly structuredOutput?: Readonly<Record<string, unknown>>;
   readonly rawArtifactRef?: string;
   readonly details?: Readonly<Record<string, unknown>>;
