@@ -46,6 +46,7 @@ import { MessageRole } from '../core/model/model-io.js';
 import { PolicyDecisionType } from '../core/model/policy.js';
 import { IterationOutcome } from '../core/model/iteration.js';
 import { ContextTier } from '../core/model/context.js';
+import type { ContextObject } from '../core/model/context-object.js';
 
 export interface IterationExecutorParams {
   readonly executionId: ExecutionId;
@@ -76,6 +77,7 @@ export class IterationExecutor {
       stateMachine,
       router,
       compiler,
+      evidenceStore,
       observerHub,
       idFactory,
       clock,
@@ -102,7 +104,14 @@ export class IterationExecutor {
     // Step 1: Load durable state
     const currentState = stateMachine.state;
 
-    // Step 2 & 3: Model Routing
+    // Calculate dynamic context requirements from initial objects, goal, task, and evidence
+    const initialObjects = options?.relevantObjects ?? [];
+    const recentEvidence = await evidenceStore?.listForTask(task.id);
+    const estimatedContextTokens =
+      initialObjects.reduce((acc: number, o: ContextObject) => acc + o.costTokens, 0) +
+      Math.ceil((goal.description.length + task.description.length) / 4) +
+      (recentEvidence ? recentEvidence.reduce((acc: number, e: Evidence) => acc + Math.ceil(e.summary.length / 4), 0) : 0);
+    const contextTokenCount = Math.max(1000, estimatedContextTokens);
     const taskCategory =
       options?.taskCategory ??
       (currentState.phase === AgentPhase.PLAN ? TaskCategory.ARCHITECTURE : TaskCategory.CODE_GEN);
@@ -112,7 +121,7 @@ export class IterationExecutor {
       complexity: options?.complexity ?? 'MEDIUM',
       risk: options?.riskLevel ?? 'LOW',
       currentState: currentState.phase,
-      contextTokenCount: 5000,
+      contextTokenCount,
       remainingBudgetDollars: goal.constraints.maxCostDollars - totalCostDollars,
       iterationCount: sequenceNumber,
     });

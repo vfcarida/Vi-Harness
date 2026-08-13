@@ -124,12 +124,16 @@ export class DefaultContextCompiler implements ContextCompiler {
     const compressionRatio =
       tokensBefore > 0 ? (tokensBefore - tokensAfter) / tokensBefore : 0;
 
+    const mandatoryRetainedCount = retainedObjects.filter((o) => ContextRanker.isMustPreserve(o)).length;
+
     const metrics: CompilationMetrics = {
+      inputObjectCount: candidates.length,
       tokensBefore,
       tokensAfter,
       compressionRatio,
       retainedCount: retainedObjects.length,
       omittedCount: compressionResult.omitted.length + dedupeResult.deduplicatedCount,
+      mandatoryRetainedCount,
       durationMs,
     };
 

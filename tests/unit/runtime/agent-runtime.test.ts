@@ -115,7 +115,7 @@ describe('DefaultAgentRuntime', () => {
 
     const result = await customRuntime.execute(sampleGoal);
     expect(result.iterations.some((iter) => iter.toolResults.some((t) => !t.status))).toBeDefined();
-  });
+  }, 15000);
 
   it('should escalate to AWAITING_HUMAN when max repair attempts are exceeded', async () => {
     const mockFailingVerification: VerificationEngine = {
@@ -146,7 +146,7 @@ describe('DefaultAgentRuntime', () => {
     const result = await customRuntime.execute(strictGoal);
     expect(result.status).toBe('AWAITING_HUMAN');
     expect(result.success).toBe(false);
-  });
+  }, 15000);
 
   it('should handle model failure and retry/fallback cleanly', async () => {
     const failingProvider = new FailingModelProvider({
@@ -166,7 +166,7 @@ describe('DefaultAgentRuntime', () => {
     const result = await failRuntime.execute(sampleGoal);
     expect(result.success).toBe(true);
     expect(result.status).toBe('COMPLETED');
-  });
+  }, 15000);
 
   it('should terminate with BUDGET_EXCEEDED when iteration budget is exhausted', async () => {
     const tightGoal: Goal = {

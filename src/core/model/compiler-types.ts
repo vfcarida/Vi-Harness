@@ -75,11 +75,13 @@ export interface CompilationExplanation {
 // ---------------------------------------------------------------------------
 
 export interface CompilationMetrics {
+  readonly inputObjectCount: number;
   readonly tokensBefore: number;
   readonly tokensAfter: number;
   readonly compressionRatio: number; // (tokensBefore - tokensAfter) / tokensBefore
   readonly retainedCount: number;
   readonly omittedCount: number;
+  readonly mandatoryRetainedCount: number;
   readonly durationMs: number;
 }
 

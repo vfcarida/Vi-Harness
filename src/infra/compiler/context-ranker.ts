@@ -39,12 +39,20 @@ export class ContextRanker {
       return true;
     }
 
-    // 2. Explicit human decisions & regressions
-    if (obj.type === ContextObjectType.DECISION && (obj.source === 'human' || obj.source === 'user')) {
+    // 2. Explicit human decisions & critical architectural decisions
+    if (
+      obj.type === ContextObjectType.DECISION &&
+      (obj.source === 'human' || obj.source === 'user' || obj.importance >= 0.8 || obj.tags.includes('critical_decision'))
+    ) {
       return true;
     }
 
-    if (obj.tags.includes('regression') || obj.tags.includes('must_preserve')) {
+    if (
+      obj.tags.includes('regression') ||
+      obj.tags.includes('must_preserve') ||
+      obj.tags.includes('critical_decision') ||
+      obj.tags.includes('security')
+    ) {
       return true;
     }
 

@@ -17,6 +17,7 @@ import type { Evidence } from './evidence.js';
 import type { TokenUsage } from './model-io.js';
 import type { TerminationDecision } from './termination.js';
 import type { TaskCategory, RiskLevel, ComplexityLevel } from './router-types.js';
+import type { ContextObject } from './context-object.js';
 
 // ---------------------------------------------------------------------------
 // Execution Status
@@ -93,6 +94,7 @@ export interface ExecutionOptions {
   readonly riskLevel?: RiskLevel;
   readonly complexity?: ComplexityLevel;
   readonly signal?: AbortSignal;
+  readonly relevantObjects?: ReadonlyArray<ContextObject>;
 }
 
 export interface ExecutionResult {
