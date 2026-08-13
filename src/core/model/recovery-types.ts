@@ -11,14 +11,28 @@ import type { ExecutionId, TaskId, CheckpointId } from '../types/identifiers.js'
 import type { AgentPhase, StateEvent } from './state.js';
 import type { ActionProposal, ActionResult } from './action.js';
 
+/**
+ * Action Execution Lifecycle Statuses.
+ *
+ * Canonical sequence:
+ * PROPOSED -> AUTHORIZED -> STARTED -> (COMPLETED | FAILED | UNKNOWN)
+ *
+ * UNKNOWN represents an operation whose actual side-effect status is uncertain
+ * (e.g. process crashed while in STARTED state for a destructive action).
+ */
 export enum ActionExecutionStatus {
   PROPOSED = 'PROPOSED',
-  RUNNING = 'RUNNING',
+  AUTHORIZED = 'AUTHORIZED',
+  STARTED = 'STARTED',
   COMPLETED = 'COMPLETED',
   FAILED = 'FAILED',
-  UNCERTAIN = 'UNCERTAIN',
-  INTERRUPTED = 'INTERRUPTED',
+  UNKNOWN = 'UNKNOWN',
 }
+
+// Backward compatibility runtime aliases (prevents ESLint enum duplicate errors)
+(ActionExecutionStatus as unknown as Record<string, string>).RUNNING = ActionExecutionStatus.STARTED;
+(ActionExecutionStatus as unknown as Record<string, string>).UNCERTAIN = ActionExecutionStatus.UNKNOWN;
+(ActionExecutionStatus as unknown as Record<string, string>).INTERRUPTED = ActionExecutionStatus.UNKNOWN;
 
 export enum RecoveryPolicy {
   RETRY_SAFE = 'RETRY_SAFE',
@@ -35,9 +49,11 @@ export interface JournalEntry {
   readonly status: ActionExecutionStatus;
   readonly isDestructive: boolean;
   readonly startedAt: Date;
+  readonly authorizedAt?: Date;
   readonly completedAt?: Date;
   readonly result?: ActionResult;
   readonly error?: string;
+  readonly unknownReason?: string;
 }
 
 export interface StateEventRecord {
