@@ -40,9 +40,9 @@ export class ScriptedModelProvider implements ModelProvider {
   private readonly steps: ReadonlyArray<ScriptStepHandler>;
   public requestHistory: ModelRequest[] = [];
 
-  constructor(options: ScriptedModelProviderOptions) {
+  constructor(options: ScriptedModelProviderOptions = { steps: [] }) {
     this.providerId = options.providerId ?? 'scripted-model-provider';
-    this.steps = options.steps;
+    this.steps = options.steps ?? [];
 
     this.descriptor = {
       id: options.descriptor?.id ?? 'scripted-model-v1',

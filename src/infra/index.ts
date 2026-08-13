@@ -141,3 +141,6 @@ export { PerformanceProfiler, TelemetryCategory } from './optimization/performan
 export { AdaptiveContextBudget } from './optimization/adaptive-context-budget.js';
 export { EvidenceCache } from './optimization/evidence-cache.js';
 export { ParallelToolExecutor } from './tools/parallel-tool-executor.js';
+
+// Pi Replacement Compatibility Layer Adapter
+export { ViHarness } from './adapter/vi-harness-adapter.js';

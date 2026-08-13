@@ -47,3 +47,4 @@ export * from './recovery-types.js';
 export * from './acceptance-policy.js';
 export * from './sandbox-types.js';
 export * from './benchmark-types.js';
+export * from './adapter-types.js';
