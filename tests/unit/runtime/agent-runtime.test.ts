@@ -8,7 +8,8 @@ import {
   UuidV7IdFactory,
   TestClock,
 } from '../../../src/infra/index.js';
-import { DefaultAgentRuntime } from '../../../src/runtime/index.js';
+import { DefaultAgentRuntime } from '../../../src/runtime/default-agent-runtime.js';
+import { DefaultVerificationEngine } from '../../../src/infra/verification/default-verification-engine.js';
 import {
   AgentPhase,
   GoalStatus,
@@ -32,6 +33,7 @@ describe('DefaultAgentRuntime', () => {
   let idFactory: UuidV7IdFactory;
   let clock: TestClock;
   let sampleGoal: Goal;
+  let verificationEngine: DefaultVerificationEngine;
 
   beforeEach(() => {
     idFactory = new UuidV7IdFactory();
@@ -47,9 +49,12 @@ describe('DefaultAgentRuntime', () => {
     router = new UtilityModelRouter();
     router.registerProvider(mockProvider);
 
+    verificationEngine = new DefaultVerificationEngine({ idFactory, clock });
+
     runtime = new DefaultAgentRuntime({
       router,
       compiler,
+      verificationEngine,
       idFactory,
       clock,
     });
@@ -159,6 +164,7 @@ describe('DefaultAgentRuntime', () => {
     const failRuntime = new DefaultAgentRuntime({
       router: failRouter,
       compiler,
+      verificationEngine,
       idFactory,
       clock,
     });

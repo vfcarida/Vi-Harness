@@ -36,7 +36,6 @@ import { AgentEventType } from '../core/model/runtime-types.js';
 
 import { AgentObserverHub } from './agent-observer.js';
 import { IterationExecutor } from './iteration-executor.js';
-import { DefaultVerificationEngine } from '../infra/verification/default-verification-engine.js';
 import { HarnessError } from '../core/errors/base-error.js';
 import { ErrorCode, ErrorCategory } from '../core/errors/error-codes.js';
 import { TerminationReason } from '../core/model/termination.js';
@@ -73,7 +72,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
   private readonly compiler: ContextCompiler;
   private readonly policyEngine?: PolicyEngine;
   private readonly toolExecutor?: ToolExecutor;
-  private readonly verificationEngine: VerificationEngine;
+  private readonly verificationEngine?: VerificationEngine;
   private readonly evidenceStore?: EvidenceStore;
   private readonly checkpointStore?: CheckpointStore;
   private readonly idFactory: IdFactory;
@@ -87,13 +86,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
     this.compiler = options.compiler;
     this.policyEngine = options.policyEngine;
     this.toolExecutor = options.toolExecutor;
-    this.verificationEngine =
-      options.verificationEngine ??
-      new DefaultVerificationEngine({
-        idFactory: options.idFactory,
-        clock: options.clock,
-        evidenceStore: options.evidenceStore,
-      });
+    this.verificationEngine = options.verificationEngine;
     this.evidenceStore = options.evidenceStore;
     this.checkpointStore = options.checkpointStore;
     this.idFactory = options.idFactory;
@@ -310,7 +303,8 @@ export class DefaultAgentRuntime implements AgentRuntime {
           break;
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorMessage = err instanceof Error ? (err.stack ?? err.message) : String(err);
+        console.error('RunLoop caught error:', errorMessage);
         observerHub.emit({
           type: AgentEventType.AgentFailed,
           executionId,

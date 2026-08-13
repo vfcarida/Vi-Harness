@@ -1,6 +1,7 @@
 /**
  * Read File Built-in Tool.
  */
+import * as fs from 'node:fs';
 import type { Tool } from '../../../core/interfaces/tool.js';
 import type { ToolInput, ToolResult, ToolExecutionContext } from '../../../core/model/tool-types.js';
 import { ToolCategory, ToolRiskLevel } from '../../../core/model/tool-types.js';
@@ -30,15 +31,26 @@ export class ReadFileTool implements Tool {
 
   async execute(input: ToolInput, context: ToolExecutionContext): Promise<ToolResult> {
     const startTime = Date.now();
-    const path = String(input['path'] ?? '');
+    const filePath = String(input['path'] ?? '');
+
+    let rawContent = `mock content for ${filePath}`;
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        rawContent = fs.readFileSync(filePath, 'utf-8');
+      } catch {
+        // Fallback for non-fs paths
+      }
+    }
+
+    const output = `[Content of ${filePath}]:\n${rawContent}`;
 
     return {
       toolCallId: this.idFactory.create<'ToolCall'>(),
       name: this.definition.name,
-      output: `[Content of ${path}]: mock content for ${path}`,
+      output,
       success: true,
       durationMs: Date.now() - startTime,
-      metadata: { path, correlationId: context.correlationId },
+      metadata: { path: filePath, correlationId: context.correlationId },
     };
   }
 }

@@ -32,6 +32,8 @@ export {
   DEFAULT_RESILIENCE_OPTIONS,
 } from './model/provider-resilience.js';
 export type { ResilientExecutionOptions } from './model/provider-resilience.js';
+export { ScriptedModelProvider } from './model/scripted-model-provider.js';
+export type { ScriptedStep, ScriptStepHandler, ScriptedModelProviderOptions } from './model/scripted-model-provider.js';
 
 // Metrics
 export { InMemoryMetricsCollector } from './metrics/in-memory-metrics-collector.js';
@@ -98,6 +100,8 @@ export { DefaultCheckpointStore } from './checkpoint/default-checkpoint-store.js
 export type { DefaultCheckpointStoreOptions } from './checkpoint/default-checkpoint-store.js';
 export { DefaultGitManager } from './git/default-git-manager.js';
 export type { DefaultGitManagerOptions } from './git/default-git-manager.js';
+export { RealGitManager } from './git/real-git-manager.js';
+export type { RealGitManagerOptions } from './git/real-git-manager.js';
 export { DefaultRollbackManager } from './git/default-rollback-manager.js';
 
 // Subagent Subsystem

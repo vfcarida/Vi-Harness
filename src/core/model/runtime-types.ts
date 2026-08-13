@@ -77,6 +77,7 @@ export interface IterationRecord {
   readonly modelId: string;
   readonly providerId: string;
   readonly actionProposed: ActionProposal | null;
+  readonly actionProposals?: ReadonlyArray<ActionProposal>;
   readonly toolResults: ReadonlyArray<ActionResult>;
   readonly evidenceCreated: ReadonlyArray<Evidence>;
   readonly tokenUsage: TokenUsage;

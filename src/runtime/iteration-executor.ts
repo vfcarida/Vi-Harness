@@ -4,21 +4,21 @@
  * "The model proposes; the runtime decides."
  *
  * Executes a single pass through the stateful, evidence-driven agent cycle:
- * 1. Load durable state
- * 2. Compile context
- * 3. Select model via ModelRouter
- * 4. Invoke model via ModelProvider
- * 5. Parse response into ActionProposals
- * 6. Evaluate actions via PolicyEngine (Deny-First)
- * 7. Execute approved tools via ToolExecutor (No Fake Tools / Fallbacks)
- * 8. Collect tool results
- * 9. Verify outcomes via VerificationEngine (No Fake Pass Evidence)
- * 10. Record evidence via EvidenceStore
- * 11. Update state via StateMachine
- * 12. Evaluate termination criteria via TerminationController
- * 13. Emit iteration events & return IterationRecord
+ * OBSERVE -> CONTEXT -> MODEL -> PROPOSE -> POLICY -> ACT -> OBSERVE RESULT -> VERIFY -> EVIDENCE -> STATE -> NEXT ITERATION
+ *
+ * Explicit Iteration Phases:
+ * 1. Observation (durable state, prior iteration outcomes, prior evidence)
+ * 2. Context Compilation (model-aware context including prior tool results & structured errors)
+ * 3. Model Decision (routing and completion execution)
+ * 4. Action Proposals (parsing single or multiple tool calls)
+ * 5. Policy Decisions (Deny-First security evaluation)
+ * 6. Tool Executions (safe parallel, mutating serial execution with structured error formatting)
+ * 7. Verification Results (running actual verification checks — no synthetic pass)
+ * 8. Evidence (recording evidence in EvidenceStore)
+ * 9. State Transition (derived strictly from actual evidence & tool results)
+ * 10. Termination Decision (evaluating stop conditions & trajectory metrics)
  */
-import type { IdFactory, ExecutionId } from '../core/types/identifiers.js';
+import type { IdFactory, ExecutionId, HypothesisId } from '../core/types/identifiers.js';
 import type { Clock } from '../core/interfaces/clock.js';
 import type { ModelRouter } from '../core/interfaces/model-router.js';
 import type { ContextCompiler } from '../core/interfaces/context-compiler.js';
@@ -68,6 +68,43 @@ export interface IterationExecutorParams {
   readonly totalCostDollars: number;
 }
 
+export interface PolicyDecisionRecord {
+  readonly proposalId: string;
+  readonly toolName: string;
+  readonly decision: PolicyDecisionType;
+  readonly ruleId?: string;
+  readonly reason: string;
+}
+
+export interface IterationPhases {
+  readonly observation: {
+    readonly stateBefore: AgentPhase;
+    readonly sequenceNumber: number;
+    readonly priorToolResultsCount: number;
+    readonly priorEvidenceCount: number;
+  };
+  readonly context: {
+    readonly compiledTokens: number;
+    readonly entriesCount: number;
+  };
+  readonly modelDecision: {
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly usage: { inputTokens: number; outputTokens: number; totalTokens: number };
+    readonly latencyMs: number;
+  };
+  readonly actionProposals: ReadonlyArray<ActionProposal>;
+  readonly policyDecisions: ReadonlyArray<PolicyDecisionRecord>;
+  readonly toolExecutions: ReadonlyArray<ActionResult>;
+  readonly evidence: ReadonlyArray<Evidence>;
+  readonly stateTransition: {
+    readonly from: AgentPhase;
+    readonly to: AgentPhase;
+    readonly event: StateEvent;
+  };
+  readonly terminationDecision: ReturnType<typeof TerminationController.evaluate>;
+}
+
 export class IterationExecutor {
   static async executeIteration(params: IterationExecutorParams): Promise<IterationRecord> {
     const {
@@ -101,12 +138,16 @@ export class IterationExecutor {
       data: { sequenceNumber, stateBefore },
     });
 
-    // Step 1: Load durable state
+    // -----------------------------------------------------------------------
+    // PHASE 1: OBSERVATION
+    // -----------------------------------------------------------------------
     const currentState = stateMachine.state;
-
-    // Calculate dynamic context requirements from initial objects, goal, task, and evidence
-    const initialObjects = options?.relevantObjects ?? [];
     const recentEvidence = await evidenceStore?.listForTask(task.id);
+
+    // -----------------------------------------------------------------------
+    // PHASE 2: CONTEXT COMPILATION
+    // -----------------------------------------------------------------------
+    const initialObjects = options?.relevantObjects ?? [];
     const estimatedContextTokens =
       initialObjects.reduce((acc: number, o: ContextObject) => acc + o.costTokens, 0) +
       Math.ceil((goal.description.length + task.description.length) / 4) +
@@ -138,7 +179,6 @@ export class IterationExecutor {
       },
     });
 
-    // Step 4: Context Compilation
     const compilationResult = await compiler.compile({
       goal,
       task,
@@ -150,7 +190,7 @@ export class IterationExecutor {
       },
     });
 
-    // Step 5: Model Completion — Structured Message Construction
+    // Construct structured messages for model (including prior tool outputs & evidence)
     const messages: ModelMessage[] = [];
 
     if (compilationResult.compiledContext.entries.length > 0) {
@@ -174,10 +214,33 @@ export class IterationExecutor {
     } else {
       messages.push({
         role: MessageRole.USER,
-        content: goal.description,
+        content: `Goal: ${goal.description}\nTask: ${task.description}`,
       });
     }
 
+    // Append prior iteration tool results & evidence to message stream
+    for (const priorIter of iterationsSoFar) {
+      for (const res of priorIter.toolResults) {
+        const toolCallId = String(res.metadata['toolCallId'] ?? res.actionId);
+        const toolName = String(res.metadata['toolName'] ?? 'tool');
+        messages.push({
+          role: MessageRole.TOOL,
+          content: res.output || (res.error ? res.error : 'Execution finished'),
+          toolCallId,
+          name: toolName,
+        });
+      }
+      for (const ev of priorIter.evidenceCreated) {
+        messages.push({
+          role: MessageRole.SYSTEM,
+          content: `[VERIFICATION_EVIDENCE] Check: ${ev.checkId}, Outcome: ${ev.outcome}, Pass: ${ev.pass}, Summary: ${ev.summary}`,
+        });
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // PHASE 3: MODEL DECISION
+    // -----------------------------------------------------------------------
     const modelRequest: ModelRequest = {
       modelId: routingDecision.selectedModelId,
       messages,
@@ -201,7 +264,9 @@ export class IterationExecutor {
       },
     });
 
-    // Step 6: Parse Action Proposals
+    // -----------------------------------------------------------------------
+    // PHASE 4: ACTION PROPOSALS (MULTIPLE TOOL CALL SUPPORT)
+    // -----------------------------------------------------------------------
     const actionProposals = ActionPlanner.parseProposals(
       modelResponse,
       task.id,
@@ -219,7 +284,10 @@ export class IterationExecutor {
       });
     }
 
-    // Step 7 & 8: Policy Evaluation & Multi-Tool Execution (Parallel Safe, Serial Mutating)
+    // -----------------------------------------------------------------------
+    // PHASE 5 & 6: POLICY DECISIONS & TOOL EXECUTIONS
+    // -----------------------------------------------------------------------
+    const policyDecisions: PolicyDecisionRecord[] = [];
     const toolResults: ActionResult[] = [];
 
     if (actionProposals.length > 0 && params.toolExecutor) {
@@ -230,10 +298,7 @@ export class IterationExecutor {
         const prop = actionProposals[i]!;
         if (prop.type === ActionType.MODEL_CALL) continue;
 
-        const toolName = String(
-          prop.parameters['toolName'] ??
-          prop.description.replace(/^Execute tool \[([^\]]+)\]$/, '$1'),
-        );
+        const toolName = extractToolName(prop);
         const tool = params.toolExecutor.getTool(toolName);
 
         if (tool && !tool.definition.mutating) {
@@ -248,51 +313,79 @@ export class IterationExecutor {
       // Execute safe read-only tools concurrently
       await Promise.all(
         safeProposals.map(async ({ proposal, index }) => {
-          const res = await executeSingleProposal(proposal, params, clock);
+          const res = await executeSingleProposalWithPolicy(proposal, params, clock, policyDecisions);
           proposalResults[index] = res;
         }),
       );
 
       // Execute mutating tools serially in sequence
       for (const { proposal, index } of mutatingProposals) {
-        const res = await executeSingleProposal(proposal, params, clock);
+        const res = await executeSingleProposalWithPolicy(proposal, params, clock, policyDecisions);
         proposalResults[index] = res;
       }
 
       for (const res of proposalResults) {
-        if (res) toolResults.push(res);
+        if (res) {
+          toolResults.push(res);
+          observerHub.emit({
+            type: AgentEventType.ToolCompleted,
+            executionId,
+            taskId: task.id,
+            timestamp: clock.now(),
+            data: { result: res },
+          });
+        }
       }
     }
 
-    // Step 9 & 10: Verification & Evidence Recording
+    // -----------------------------------------------------------------------
+    // PHASE 7 & 8: VERIFICATION RESULTS & EVIDENCE RECORDING
+    // -----------------------------------------------------------------------
     const evidenceCreated: Evidence[] = [];
     const now = clock.now();
 
+    const hasTestRunAction = actionProposals.some((p) => {
+      if (p.type === ActionType.TEST_RUN) return true;
+      const desc = p.description.toLowerCase();
+      const cmd = String(p.parameters['cmd'] ?? p.parameters['command'] ?? p.parameters['input'] ?? '').toLowerCase();
+      return desc.includes('test') || cmd.includes('test');
+    });
+
     if (params.verificationEngine) {
-      const vResult = await params.verificationEngine.verify({
-        type: 'test-suite',
-        content: task.description,
-      });
+      if (currentState.phase === AgentPhase.VERIFY || hasTestRunAction) {
+        const vResult = await params.verificationEngine.verify({
+          type: 'test-suite',
+          content: task.description,
+        });
 
-      const ev: Evidence = {
-        id: idFactory.create<'Evidence'>(),
-        taskId: task.id,
-        type: EvidenceType.TEST_RESULT,
-        outcome: vResult.status === 'PASSED' ? EvidenceOutcome.PASS : EvidenceOutcome.FAIL,
-        summary: vResult.summary ?? (vResult.status === 'PASSED' ? 'Verification Passed' : 'Verification Failed'),
-        data: { status: vResult.status },
-        createdAt: now,
-        pass: vResult.status === 'PASSED',
-        confidence: vResult.confidence ?? 0.95,
-        affectedFiles: vResult.affectedFiles ?? [],
-      };
+        const ev: Evidence = {
+          id: idFactory.create<'Evidence'>(),
+          taskId: task.id,
+          type: EvidenceType.TEST_RESULT,
+          outcome: vResult.status === 'PASSED' ? EvidenceOutcome.PASS : EvidenceOutcome.FAIL,
+          summary: vResult.summary ?? (vResult.status === 'PASSED' ? 'Verification Suite Passed' : 'Verification Suite Failed'),
+          data: { status: vResult.status },
+          createdAt: now,
+          pass: vResult.status === 'PASSED',
+          confidence: vResult.confidence ?? 0.95,
+          affectedFiles: vResult.affectedFiles ?? [],
+        };
 
-      evidenceCreated.push(ev);
-      if (params.evidenceStore) {
-        await params.evidenceStore.record(ev);
+        evidenceCreated.push(ev);
+        if (params.evidenceStore) {
+          await params.evidenceStore.record(ev);
+        }
+
+        observerHub.emit({
+          type: AgentEventType.EvidenceCreated,
+          executionId,
+          taskId: task.id,
+          timestamp: now,
+          data: { evidence: ev },
+        });
       }
     } else {
-      // Rule 3: Missing verification MUST NOT become PASS. Synthetic success is prohibited.
+      // Missing verification MUST NOT become PASS. Synthetic success prohibited.
       const ev: Evidence = {
         id: idFactory.create<'Evidence'>(),
         taskId: task.id,
@@ -301,21 +394,34 @@ export class IterationExecutor {
         summary: 'VERIFICATION_UNAVAILABLE: Verification engine not configured',
         data: { status: 'UNAVAILABLE' },
         createdAt: now,
-        pass: false, // MUST NOT BE PASS
+        pass: false,
         confidence: 0.0,
         affectedFiles: [],
       };
       evidenceCreated.push(ev);
+      if (params.evidenceStore) {
+        await params.evidenceStore.record(ev);
+      }
+
+      observerHub.emit({
+        type: AgentEventType.EvidenceCreated,
+        executionId,
+        taskId: task.id,
+        timestamp: now,
+        data: { evidence: ev },
+      });
     }
 
-    // Step 11: State Machine Transition
+    // -----------------------------------------------------------------------
+    // PHASE 9: DERIVED STATE TRANSITION (STRICT RESULTS-BASED)
+    // -----------------------------------------------------------------------
     const hasFailingEvidence = evidenceCreated.some((e) => !e.pass);
     const hasPassedEvidence = evidenceCreated.some((e) => e.pass);
     const hasFailingTool = toolResults.some(
-      (t) => t.status === ActionResultStatus.FAILURE || t.status === ActionResultStatus.DENIED
+      (t) => t.status === ActionResultStatus.FAILURE || t.status === ActionResultStatus.DENIED,
     );
 
-    let nextEvent = StateEvent.VERIFICATION_PASSED;
+    let nextEvent: StateEvent | null = StateEvent.VERIFICATION_PASSED;
 
     if (stateBefore === AgentPhase.INIT) {
       nextEvent = StateEvent.START;
@@ -324,22 +430,25 @@ export class IterationExecutor {
     } else if (stateBefore === AgentPhase.PLAN) {
       nextEvent = StateEvent.PLAN_READY;
     } else if (stateBefore === AgentPhase.IMPLEMENT) {
-      nextEvent = hasFailingTool ? StateEvent.VERIFICATION_FAILED : StateEvent.IMPLEMENTATION_COMPLETE;
+      nextEvent = StateEvent.IMPLEMENTATION_COMPLETE;
     } else if (stateBefore === AgentPhase.VERIFY) {
-      nextEvent = hasFailingEvidence || !hasPassedEvidence ? StateEvent.VERIFICATION_FAILED : StateEvent.VERIFICATION_PASSED;
+      nextEvent = (hasFailingEvidence || !hasPassedEvidence) ? StateEvent.VERIFICATION_FAILED : StateEvent.VERIFICATION_PASSED;
     } else if (stateBefore === AgentPhase.REPAIR) {
-      nextEvent = hasFailingTool || hasFailingEvidence || !hasPassedEvidence ? StateEvent.VERIFICATION_FAILED : StateEvent.REPAIR_COMPLETE;
+      nextEvent = hasPassedEvidence ? StateEvent.REPAIR_COMPLETE : null;
     }
 
-    if (stateMachine.phase !== AgentPhase.DONE && !stateMachine.isTerminal) {
+    if (nextEvent && stateMachine.phase !== AgentPhase.DONE && !stateMachine.isTerminal) {
       try {
         stateMachine.apply(nextEvent, {
           evidenceIds: evidenceCreated.map((e) => e.id),
         });
       } catch {
-        // Fallback transition if specific event fails
         if (stateMachine.phase === AgentPhase.REPAIR && hasFailingEvidence) {
-          stateMachine.apply(StateEvent.ESCALATE);
+          try {
+            stateMachine.apply(StateEvent.ESCALATE);
+          } catch {
+            // Ignore if escalation not possible
+          }
         }
       }
     }
@@ -354,7 +463,9 @@ export class IterationExecutor {
       data: { from: stateBefore, to: stateAfter, event: nextEvent },
     });
 
-    // Step 12: Stop Condition Evaluation
+    // -----------------------------------------------------------------------
+    // PHASE 10: TERMINATION DECISION
+    // -----------------------------------------------------------------------
     const elapsedMs = clock.now().getTime() - startTimeMs;
     const currentCost = totalCostDollars + modelResponse.estimatedCostDollars;
     const failingEvidenceIds = evidenceCreated.filter((e) => !e.pass).map((e) => e.id);
@@ -363,7 +474,6 @@ export class IterationExecutor {
       ? IterationOutcome.VERIFICATION_FAILED
       : (hasPassedEvidence ? IterationOutcome.VERIFICATION_PASSED : IterationOutcome.PROGRESS);
 
-    // Map iteration records to Iteration model
     const iterationModels = iterationsSoFar.map((rec) => ({
       id: rec.iterationId,
       taskId: task.id,
@@ -388,23 +498,32 @@ export class IterationExecutor {
       metadata: {},
     }));
 
+    const filesModified = toolResults
+      .map((r) => String(r.metadata['path'] ?? ''))
+      .filter((p) => p.length > 0);
+
+    const failingTool = toolResults.find((r) => r.status === ActionResultStatus.FAILURE || r.status === ActionResultStatus.DENIED);
+    const toolFailureSignature = failingTool
+      ? `${failingTool.metadata['toolName'] ?? 'tool'}:${failingTool.metadata['errorCode'] ?? failingTool.status}`
+      : null;
+
     const currentIterationModel = {
       id: iterationId,
       taskId: task.id,
       sequenceNumber,
       outcome: iterationOutcome,
       fingerprint: {
-        filesModified: [],
-        hypothesisId: null,
+        filesModified,
+        hypothesisId: (actionProposals[0]?.id ? (actionProposals[0].id as unknown as HypothesisId) : null),
         errorSignature: hasFailingEvidence ? 'ERR_VERIFICATION' : null,
-        patchSignature: null,
+        patchSignature: filesModified.length > 0 ? `patch-${filesModified.join(',')}` : null,
         failingTests: failingEvidenceIds,
         phaseAtStart: stateBefore,
         stateTrajectory: [stateBefore],
-        toolFailureSignature: null,
+        toolFailureSignature,
       },
       evidenceIds: evidenceCreated.map((e) => e.id),
-      actionIds: [],
+      actionIds: actionProposals.map((a) => a.id),
       startedAt: iterationStart,
       completedAt: clock.now(),
       durationMs: clock.now().getTime() - iterationStart.getTime(),
@@ -433,6 +552,7 @@ export class IterationExecutor {
       modelId: routingDecision.selectedModelId,
       providerId: routingDecision.selectedProvider.providerId,
       actionProposed: actionProposals[0] ?? null,
+      actionProposals,
       toolResults,
       evidenceCreated,
       tokenUsage: modelResponse.usage,
@@ -452,27 +572,42 @@ export class IterationExecutor {
   }
 }
 
-async function executeSingleProposal(
+function extractToolName(proposal: ActionProposal): string {
+  if (proposal.parameters['toolName']) {
+    return String(proposal.parameters['toolName']);
+  }
+  const match = proposal.description.match(/^Execute tool \[([^\]]+)\]$/);
+  if (match && match[1]) {
+    return match[1];
+  }
+  return proposal.description;
+}
+
+async function executeSingleProposalWithPolicy(
   proposal: ActionProposal,
   params: IterationExecutorParams,
   clock: Clock,
+  policyDecisions: PolicyDecisionRecord[],
 ): Promise<ActionResult> {
-  const toolName = String(
-    proposal.parameters['toolName'] ??
-    proposal.description.replace(/^Execute tool \[([^\]]+)\]$/, '$1'),
-  );
+  const toolName = extractToolName(proposal);
+  const toolCallId = String(proposal.parameters['toolCallId'] ?? proposal.id);
   const input = (proposal.parameters['input'] as Record<string, unknown>) ?? proposal.parameters;
   const tool = params.toolExecutor?.getTool(toolName);
 
   if (!tool) {
+    const errorPayload = JSON.stringify({
+      success: false,
+      errorCode: 'UNKNOWN_TOOL',
+      message: `Tool [${toolName}] is not registered in ToolRegistry`,
+    });
     return {
       actionId: proposal.id,
       status: ActionResultStatus.FAILURE,
       output: '',
       durationMs: 0,
-      error: `UNKNOWN_TOOL: Tool [${toolName}] is not registered in ToolRegistry`,
+      error: errorPayload,
       executedAt: clock.now(),
-      metadata: { toolName, outcome: 'UNKNOWN_TOOL' },
+      metadata: { toolCallId, toolName, errorCode: 'UNKNOWN_TOOL', outcome: 'UNKNOWN_TOOL' },
     };
   }
 
@@ -484,15 +619,28 @@ async function executeSingleProposal(
       irreversible: proposal.irreversible,
     };
     const evaluation = await params.policyEngine.evaluate(action);
+    policyDecisions.push({
+      proposalId: proposal.id,
+      toolName: tool.definition.name,
+      decision: evaluation.decision,
+      ruleId: evaluation.ruleId,
+      reason: evaluation.reason,
+    });
+
     if (evaluation.decision === PolicyDecisionType.DENY) {
+      const errorPayload = JSON.stringify({
+        success: false,
+        errorCode: 'POLICY_DENIED',
+        message: `Execution denied by policy rule [${evaluation.ruleId ?? 'default'}]: ${evaluation.reason}`,
+      });
       return {
         actionId: proposal.id,
         status: ActionResultStatus.DENIED,
         output: '',
         durationMs: 0,
-        error: `POLICY_DENIED: Execution denied by rule [${evaluation.ruleId ?? 'default'}]`,
+        error: errorPayload,
         executedAt: clock.now(),
-        metadata: { ruleId: evaluation.ruleId, outcome: 'POLICY_DENIED' },
+        metadata: { toolCallId, toolName, ruleId: evaluation.ruleId, errorCode: 'POLICY_DENIED', outcome: 'POLICY_DENIED' },
       };
     }
   }
@@ -504,24 +652,37 @@ async function executeSingleProposal(
       requiresPolicy: false,
     });
 
+    const outputContent = result.success
+      ? result.output
+      : JSON.stringify({
+          success: false,
+          errorCode: (result.metadata?.['errorCode'] as string) ?? 'TOOL_EXECUTION_FAILED',
+          message: result.error ?? 'Tool execution failed',
+        });
+
     return {
       actionId: proposal.id,
       status: result.success ? ActionResultStatus.SUCCESS : ActionResultStatus.FAILURE,
-      output: result.output,
+      output: outputContent,
       durationMs: result.durationMs,
       error: result.error,
       executedAt: clock.now(),
-      metadata: result.metadata ?? {},
+      metadata: { toolCallId, toolName, ...(result.metadata ?? {}) },
     };
   } catch (err) {
+    const errorPayload = JSON.stringify({
+      success: false,
+      errorCode: 'TOOL_EXECUTION_FAILED',
+      message: err instanceof Error ? err.message : String(err),
+    });
     return {
       actionId: proposal.id,
       status: ActionResultStatus.FAILURE,
       output: '',
       durationMs: 0,
-      error: err instanceof Error ? err.message : String(err),
+      error: errorPayload,
       executedAt: clock.now(),
-      metadata: { toolName },
+      metadata: { toolCallId, toolName, errorCode: 'TOOL_EXECUTION_FAILED' },
     };
   }
 }

@@ -1,9 +1,9 @@
 /**
- * Default Git Manager.
+ * Default Git Manager (In-Memory Simulation for Unit Testing).
  *
  * Implements GitManager interface:
  * Provides workspace state tracking, diff generation, branch creation,
- * file restoration, and explicit file ownership attribution (agent vs user).
+ * file restoration, baseline measurement, and explicit file ownership attribution (agent vs user).
  */
 import type { GitManager } from '../../core/interfaces/git-manager.js';
 import type { WorkspaceState } from '../../core/model/git-types.js';
@@ -20,6 +20,8 @@ export class DefaultGitManager implements GitManager {
   private readonly modifiedFilesSet = new Set<string>();
   private readonly stagedFilesSet = new Set<string>();
   private readonly untrackedFilesSet = new Set<string>();
+  private readonly baselineUserFiles = new Set<string>();
+  private baselineCaptured = false;
   private commitCounter = 1;
 
   constructor(options?: DefaultGitManagerOptions) {
@@ -41,6 +43,22 @@ export class DefaultGitManager implements GitManager {
     return this.modifiedFilesSet.size > 0 || this.stagedFilesSet.size > 0 || this.untrackedFilesSet.size > 0;
   }
 
+  async captureBaseline(): Promise<WorkspaceState> {
+    const status = await this.getStatus();
+    for (const file of [...this.modifiedFilesSet, ...this.stagedFilesSet, ...this.untrackedFilesSet]) {
+      if (this.fileOwners.get(file) !== 'agent') {
+        this.baselineUserFiles.add(file);
+      }
+    }
+    this.baselineCaptured = true;
+    return status;
+  }
+
+  async getAgentDelta(): Promise<ReadonlyArray<string>> {
+    const status = await this.getStatus();
+    return status.agentOwnedChanges;
+  }
+
   async getStatus(): Promise<WorkspaceState> {
     const isDirty = await this.isDirty();
     const agentOwnedChanges: string[] = [];
@@ -53,8 +71,12 @@ export class DefaultGitManager implements GitManager {
     ]);
 
     for (const file of allChanges) {
-      const owner = this.fileOwners.get(file) ?? 'user';
-      if (owner === 'agent') {
+      const explicitOwner = this.fileOwners.get(file);
+      if (explicitOwner === 'agent') {
+        agentOwnedChanges.push(file);
+      } else if (explicitOwner === 'user' || this.baselineUserFiles.has(file)) {
+        userOwnedChanges.push(file);
+      } else if (this.baselineCaptured) {
         agentOwnedChanges.push(file);
       } else {
         userOwnedChanges.push(file);

@@ -2,7 +2,7 @@
  * GitManager Interface.
  *
  * Provides repository state management, diff generation, branch/worktree management,
- * path restoration, and file ownership classification (agent vs user).
+ * path restoration, baseline measurement, and file ownership classification (agent vs user).
  */
 import type { WorkspaceState } from '../model/git-types.js';
 
@@ -30,4 +30,10 @@ export interface GitManager {
 
   /** Mark explicit owner for a modified path ('agent' or 'user'). */
   markFileOwner(path: string, owner: 'agent' | 'user'): void;
+
+  /** Capture baseline workspace state before agent modifications begin. */
+  captureBaseline(): Promise<WorkspaceState>;
+
+  /** Calculate agent delta relative to captured baseline state. */
+  getAgentDelta(): Promise<ReadonlyArray<string>>;
 }
