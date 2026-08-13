@@ -45,7 +45,11 @@ export class ActionPlanner {
           iterationId,
           type: actionType,
           description: `Execute tool [${tc.name}]`,
-          parameters: tc.input,
+          parameters: {
+            ...tc.input,
+            toolName: tc.name,
+            toolCallId: tc.id,
+          },
           irreversible,
           proposedAt: now,
         });

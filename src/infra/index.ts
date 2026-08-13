@@ -150,5 +150,16 @@ export { AdaptiveContextBudget } from './optimization/adaptive-context-budget.js
 export { EvidenceCache } from './optimization/evidence-cache.js';
 export { ParallelToolExecutor } from './tools/parallel-tool-executor.js';
 
+// Context Efficiency Benchmark Subsystem
+export { ContextTrajectoryGenerator } from './eval/context-trajectory-generator.js';
+export { ContextBenchmarkRunner } from './eval/context-benchmark-runner.js';
+export { ContextBenchmarkReport } from './eval/context-benchmark-report.js';
+export { NaiveAccumulationStrategy } from './eval/strategies/naive-accumulation-strategy.js';
+export { PiCompactionStrategy } from './eval/strategies/pi-compaction-strategy.js';
+export type { PiCompactionOptions } from './eval/strategies/pi-compaction-strategy.js';
+export { ViContextCompilerStrategy } from './eval/strategies/vi-context-compiler-strategy.js';
+export type { ViContextCompilerOptions } from './eval/strategies/vi-context-compiler-strategy.js';
+export type { ContextBenchmarkStrategy, StrategyStepResult, RetentionEvaluationResult } from './eval/strategies/context-strategy.js';
+
 // Pi Replacement Compatibility Layer Adapter
 export { ViHarness } from './adapter/vi-harness-adapter.js';

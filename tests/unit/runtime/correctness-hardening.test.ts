@@ -151,6 +151,6 @@ describe('Runtime Correctness & Hardening Suite', () => {
 
     expect(proposals).toHaveLength(1);
     expect(proposals[0]?.description).toBe('Execute tool [read_file]');
-    expect(proposals[0]?.parameters).toEqual({ path: 'src/index.ts' });
+    expect(proposals[0]?.parameters).toMatchObject({ path: 'src/index.ts' });
   });
 });

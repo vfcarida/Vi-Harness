@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src/ tests/",
     "benchmark": "tsx src/cli/benchmark-cli.ts",
+    "benchmark:context": "tsx src/cli/context-benchmark-cli.ts",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "clean": "node -e \"const fs=require('fs');fs.rmSync('dist',{recursive:true,force:true})\""

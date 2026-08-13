@@ -11,13 +11,60 @@ import type {
   IterationId,
   CheckpointId,
 } from '../types/identifiers.js';
-import type { AgentPhase } from './state.js';
+import type { AgentPhase, StateEvent } from './state.js';
 import type { ActionProposal, ActionResult } from './action.js';
 import type { Evidence } from './evidence.js';
 import type { TokenUsage } from './model-io.js';
 import type { TerminationDecision } from './termination.js';
 import type { TaskCategory, RiskLevel, ComplexityLevel } from './router-types.js';
 import type { ContextObject } from './context-object.js';
+import type { PolicyDecisionType } from './policy.js';
+
+// ---------------------------------------------------------------------------
+// Iteration Phase Breakdown
+// ---------------------------------------------------------------------------
+
+export interface PolicyDecisionRecord {
+  readonly proposalId: string;
+  readonly toolName: string;
+  readonly decision: PolicyDecisionType;
+  readonly ruleId?: string;
+  readonly reason: string;
+}
+
+export interface IterationPhases {
+  readonly observation: {
+    readonly stateBefore: AgentPhase;
+    readonly sequenceNumber: number;
+    readonly priorToolResultsCount: number;
+    readonly priorEvidenceCount: number;
+  };
+  readonly context: {
+    readonly compiledTokens: number;
+    readonly entriesCount: number;
+  };
+  readonly modelDecision: {
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly usage: TokenUsage;
+    readonly latencyMs: number;
+  };
+  readonly actionProposals: ReadonlyArray<ActionProposal>;
+  readonly policyDecisions: ReadonlyArray<PolicyDecisionRecord>;
+  readonly toolExecutions: ReadonlyArray<ActionResult>;
+  readonly verificationResults: {
+    readonly performed: boolean;
+    readonly status?: string;
+    readonly summary?: string;
+  };
+  readonly evidence: ReadonlyArray<Evidence>;
+  readonly stateTransition: {
+    readonly from: AgentPhase;
+    readonly to: AgentPhase;
+    readonly event: StateEvent | null;
+  };
+  readonly terminationDecision: TerminationDecision;
+}
 
 // ---------------------------------------------------------------------------
 // Execution Status
@@ -63,6 +110,8 @@ export interface AgentEvent {
   readonly data: Readonly<Record<string, unknown>>;
 }
 
+import type { Iteration } from './iteration.js';
+
 // ---------------------------------------------------------------------------
 // Audit Record per Iteration
 // ---------------------------------------------------------------------------
@@ -83,6 +132,8 @@ export interface IterationRecord {
   readonly tokenUsage: TokenUsage;
   readonly costDollars: number;
   readonly terminationDecision: TerminationDecision;
+  readonly phases?: IterationPhases;
+  readonly iterationModel?: Iteration;
 }
 
 // ---------------------------------------------------------------------------

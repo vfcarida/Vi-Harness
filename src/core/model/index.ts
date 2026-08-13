@@ -48,3 +48,4 @@ export * from './acceptance-policy.js';
 export * from './sandbox-types.js';
 export * from './benchmark-types.js';
 export * from './adapter-types.js';
+export * from './context-benchmark-types.js';
