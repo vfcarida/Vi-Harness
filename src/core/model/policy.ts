@@ -47,6 +47,8 @@ export interface PermissionContext {
   readonly networkAccess: boolean;
   readonly userApproved?: boolean;
   readonly environment: 'DEVELOPMENT' | 'STAGING' | 'PRODUCTION';
+  readonly approvalToken?: string;
+  readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 export const DEFAULT_PERMISSION_CONTEXT: Readonly<PermissionContext> = {

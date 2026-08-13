@@ -54,7 +54,7 @@ export class RealGitManager implements GitManager {
   /** Run a git CLI command in workingDir. */
   private async execGit(args: ReadonlyArray<string>): Promise<string> {
     try {
-      const { stdout } = await execFileAsync('git', [...args], {
+      const { stdout } = await execFileAsync('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
         cwd: this.workingDir,
         encoding: 'utf-8',
         maxBuffer: 10 * 1024 * 1024,

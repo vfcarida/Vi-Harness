@@ -4,12 +4,11 @@
  * Implements SubagentManager interface:
  * "Subagents return artifacts and evidence, not entire transcripts."
  *
- * Features:
- * - Isolated working context & context token budgets
- * - Tool permission scoping (restricts available tools to spec.allowedTools)
- * - Failure isolation (subagent failures do NOT corrupt parent state)
- * - Sequential, parallel, and dependent DAG execution
- * - Parent receives summary, artifacts, evidence, decisions, and unresolved issues
+ * Security:
+ * - Permission Containment: Subagent allowed tools must be a subset of parent permitted tools.
+ * - Recursion / Fork-bomb Defense: Enforces max subagent nesting depth.
+ * - Output Sanitization: Scrubs secrets and prompt injections from subagent artifacts and summaries.
+ * - Failure Isolation: Subagent errors never crash or corrupt parent agent runtime.
  */
 import type { SubagentManager } from '../../core/interfaces/subagent-manager.js';
 import type { ToolExecutor } from '../../core/interfaces/tool-executor.js';
@@ -24,19 +23,29 @@ import type {
 import { SubagentRole } from '../../core/model/subagent-types.js';
 import type { Evidence } from '../../core/model/evidence.js';
 import { EvidenceOutcome, EvidenceType } from '../../core/model/evidence.js';
+import { SecretScrubber } from '../security/secret-scrubber.js';
+import { ContextSanitizer } from '../security/context-sanitizer.js';
 
 export interface DefaultSubagentManagerOptions {
   readonly idFactory: IdFactory;
   readonly clock: Clock;
   readonly toolExecutor?: ToolExecutor;
   readonly evidenceStore?: EvidenceStore;
+  readonly parentAllowedTools?: ReadonlyArray<string>;
+  readonly currentDepth?: number;
+  readonly maxDepth?: number;
 }
+
+export const MAX_SUBAGENT_DEPTH = 3;
 
 export class DefaultSubagentManager implements SubagentManager {
   private readonly idFactory: IdFactory;
   private readonly clock: Clock;
   private readonly toolExecutor?: ToolExecutor;
   private readonly evidenceStore?: EvidenceStore;
+  private readonly parentAllowedTools?: ReadonlyArray<string>;
+  private readonly currentDepth: number;
+  private readonly maxDepth: number;
   private readonly activeControllers = new Set<AbortController>();
 
   constructor(options: DefaultSubagentManagerOptions) {
@@ -44,6 +53,9 @@ export class DefaultSubagentManager implements SubagentManager {
     this.clock = options.clock;
     this.toolExecutor = options.toolExecutor;
     this.evidenceStore = options.evidenceStore;
+    this.parentAllowedTools = options.parentAllowedTools;
+    this.currentDepth = options.currentDepth ?? 0;
+    this.maxDepth = options.maxDepth ?? MAX_SUBAGENT_DEPTH;
   }
 
   async spawn(spec: SubagentSpec, signal?: AbortSignal): Promise<SubagentResult> {
@@ -51,6 +63,47 @@ export class DefaultSubagentManager implements SubagentManager {
     const subagentId: SubagentId = spec.id ?? this.idFactory.create<'Subagent'>();
     const taskId: TaskId = this.idFactory.create<'Task'>();
     const now = this.clock.now();
+
+    // 1. Nesting Depth Defense (Fork-bomb prevention)
+    if (this.currentDepth >= this.maxDepth) {
+      return {
+        subagentId,
+        role: spec.role,
+        success: false,
+        summary: `Subagent nesting depth limit [${this.maxDepth}] exceeded.`,
+        artifacts: [],
+        evidence: [],
+        decisions: [],
+        unresolvedIssues: [`Maximum subagent recursion depth ${this.maxDepth} reached`],
+        iterationCount: 0,
+        durationMs: Date.now() - startTime,
+        error: 'SUBAGENT_MAX_DEPTH_EXCEEDED',
+      };
+    }
+
+    // 2. Permission Containment (Privilege Escalation Defense)
+    if (this.parentAllowedTools && this.parentAllowedTools.length > 0) {
+      const parentToolSet = new Set(this.parentAllowedTools.map((t) => t.toLowerCase()));
+      if (!parentToolSet.has('*')) {
+        for (const toolName of spec.allowedTools) {
+          if (!parentToolSet.has(toolName.toLowerCase())) {
+            return {
+              subagentId,
+              role: spec.role,
+              success: false,
+              summary: `Permission escalation denied: subagent requested tool [${toolName}] not allowed by parent.`,
+              artifacts: [],
+              evidence: [],
+              decisions: [],
+              unresolvedIssues: [`Unauthorized tool requested: ${toolName}`],
+              iterationCount: 0,
+              durationMs: Date.now() - startTime,
+              error: 'SUBAGENT_PERMISSION_ESCALATION',
+            };
+          }
+        }
+      }
+    }
 
     const controller = new AbortController();
     this.activeControllers.add(controller);
@@ -90,7 +143,20 @@ export class DefaultSubagentManager implements SubagentManager {
 
       const result = await Promise.race([executionPromise, timeoutPromise]);
       this.activeControllers.delete(controller);
-      return result;
+
+      // Scrub artifacts & summary
+      const scrubbedArtifacts: SubagentArtifact[] = result.artifacts.map((a) => ({
+        ...a,
+        content: SecretScrubber.scrub(ContextSanitizer.sanitize(a.content)),
+      }));
+
+      const scrubbedSummary = SecretScrubber.scrub(ContextSanitizer.sanitize(result.summary));
+
+      return {
+        ...result,
+        summary: scrubbedSummary,
+        artifacts: scrubbedArtifacts,
+      };
     } catch (err) {
       this.activeControllers.delete(controller);
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -183,7 +249,6 @@ export class DefaultSubagentManager implements SubagentManager {
       });
 
       if (readySpecs.length === 0) {
-        // Unresolvable cycle or missing dependency
         break;
       }
 
@@ -225,7 +290,7 @@ export class DefaultSubagentManager implements SubagentManager {
     // Microtask tick for async timeout/cancellation handling
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    // 1. Tool Permission Scoping Check
+    // Tool Permission Scoping Check
     if (this.toolExecutor) {
       for (const toolName of spec.allowedTools) {
         const tool = this.toolExecutor.getTool(toolName);
@@ -235,7 +300,7 @@ export class DefaultSubagentManager implements SubagentManager {
       }
     }
 
-    // 2. Simulate Subagent Role Execution
+    // Role execution
     const artifacts: SubagentArtifact[] = [];
     const evidenceList: Evidence[] = [];
     const decisions: string[] = [];

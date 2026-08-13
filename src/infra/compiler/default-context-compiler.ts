@@ -35,6 +35,8 @@ import { ContextDeduplicator } from './context-deduplicator.js';
 import { ContextRanker } from './context-ranker.js';
 import { ContextCompressor } from './context-compressor.js';
 import { ContextValidator } from './context-validator.js';
+import { ContextSanitizer } from '../security/context-sanitizer.js';
+import { SecretScrubber } from '../security/secret-scrubber.js';
 
 export interface DefaultContextCompilerOptions {
   readonly idFactory: IdFactory;
@@ -96,21 +98,24 @@ export class DefaultContextCompiler implements ContextCompiler {
     );
 
     // 7. Stage 6: Context Assembly
-    const compiledEntries: ContextEntry[] = retainedObjects.map((obj) => ({
-      id: this.idFactory.create<'Context'>(),
-      tier: obj.tier,
-      content: `[${obj.type}] ${obj.content}`,
-      metadata: {
-        originalId: obj.id,
-        source: obj.source,
-        version: obj.version,
-        importance: obj.importance,
-        confidence: obj.confidence,
-        tags: obj.tags,
-      },
-      createdAt: obj.timestamp,
-      tokenEstimate: obj.costTokens,
-    }));
+    const compiledEntries: ContextEntry[] = retainedObjects.map((obj) => {
+      const sanitizedContent = SecretScrubber.scrub(ContextSanitizer.sanitize(obj.content));
+      return {
+        id: this.idFactory.create<'Context'>(),
+        tier: obj.tier,
+        content: `[${obj.type}] ${sanitizedContent}`,
+        metadata: {
+          originalId: obj.id,
+          source: obj.source,
+          version: obj.version,
+          importance: obj.importance,
+          confidence: obj.confidence,
+          tags: obj.tags,
+        },
+        createdAt: obj.timestamp,
+        tokenEstimate: obj.costTokens,
+      };
+    });
 
     const compiledContext: CompiledContext = {
       entries: compiledEntries,

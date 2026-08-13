@@ -2,10 +2,11 @@
  * Default Tool Executor.
  *
  * Implements ToolExecutor contract:
+ * - Application-level input sanitization & prototype pollution defense
  * - Registry lookup & schema validation
  * - Policy Engine integration (DENY / ALLOW checks)
- * - Command normalization for EXECUTE tools
  * - Timeout enforcement & AbortSignal cancellation
+ * - Output secret scrubbing
  * - Correlation tracking & structured metadata mapping
  */
 import type { ToolExecutor, ToolExecutionRequest } from '../../core/interfaces/tool-executor.js';
@@ -18,6 +19,7 @@ import { DefaultToolRegistry } from './default-tool-registry.js';
 import { HarnessError } from '../../core/errors/base-error.js';
 import { ErrorCode, ErrorCategory } from '../../core/errors/error-codes.js';
 import { PolicyDecisionType } from '../../core/model/policy.js';
+import { SecretScrubber } from '../security/secret-scrubber.js';
 
 export interface DefaultToolExecutorOptions {
   readonly registry?: ToolRegistry;
@@ -69,6 +71,9 @@ export class DefaultToolExecutor implements ToolExecutor {
       });
     }
 
+    // 1. Prototype Pollution & Malicious Argument Defense
+    const sanitizedInput = sanitizeToolInput(request.input);
+
     const correlationId =
       request.context?.correlationId ?? this.idFactory.create<'Trace'>();
     const timeoutMs = request.context?.timeoutMs ?? tool.definition.defaultTimeoutMs;
@@ -88,15 +93,15 @@ export class DefaultToolExecutor implements ToolExecutor {
       toolName: tool.definition.name,
       version: tool.definition.version,
       inputSchema: tool.definition.inputSchema,
-      validatedInput: request.input,
+      validatedInput: sanitizedInput,
       timeoutMs,
       riskLevel: tool.definition.riskLevel,
       mutating: tool.definition.mutating,
       idempotent: tool.definition.idempotent,
     };
 
-    // 1. Schema Validation
-    const validation = this.registry.validateInput(tool.definition.name, request.input);
+    // 2. Schema Validation
+    const validation = this.registry.validateInput(tool.definition.name, sanitizedInput);
     if (!validation.valid) {
       throw new HarnessError({
         code: ErrorCode.TOOL_INVALID_INPUT,
@@ -105,7 +110,7 @@ export class DefaultToolExecutor implements ToolExecutor {
       });
     }
 
-    // 2. Cancellation Check
+    // 3. Cancellation Check
     if (fullContext.signal?.aborted) {
       return {
         toolCallId: this.idFactory.create<'ToolCall'>(),
@@ -118,7 +123,7 @@ export class DefaultToolExecutor implements ToolExecutor {
       };
     }
 
-    // 3. Policy Engine Evaluation (Unbypassable for Security-Critical Operations)
+    // 4. Policy Engine Evaluation (Unbypassable for Security-Critical Operations)
     const isSecurityCritical =
       tool.definition.mutating ||
       tool.definition.irreversible === true ||
@@ -132,10 +137,10 @@ export class DefaultToolExecutor implements ToolExecutor {
 
     if (this.policyEngine && isSecurityCritical) {
       const actionResource = String(
-        request.input['path'] ??
-        request.input['cmd'] ??
-        request.input['command'] ??
-        request.input['url'] ??
+        sanitizedInput['path'] ??
+        sanitizedInput['cmd'] ??
+        sanitizedInput['command'] ??
+        sanitizedInput['url'] ??
         tool.definition.name,
       );
 
@@ -143,11 +148,11 @@ export class DefaultToolExecutor implements ToolExecutor {
         type: tool.definition.category,
         resource: actionResource,
         metadata: {
-          ...request.input,
+          ...sanitizedInput,
           toolName: tool.definition.name,
-          path: request.input['path'],
-          cmd: request.input['cmd'] ?? request.input['command'],
-          url: request.input['url'],
+          path: sanitizedInput['path'],
+          cmd: sanitizedInput['cmd'] ?? sanitizedInput['command'],
+          url: sanitizedInput['url'],
         },
         irreversible:
           tool.definition.irreversible ??
@@ -164,7 +169,7 @@ export class DefaultToolExecutor implements ToolExecutor {
           success: false,
           durationMs: Date.now() - startTime,
           error: `Policy DENIED tool execution: ${evaluation.reason}`,
-          metadata: { ...baseMetadata, ruleId: evaluation.ruleId, decision: evaluation.decision },
+          metadata: { ...baseMetadata, ruleId: evaluation.ruleId, decision: evaluation.decision, errorCode: 'POLICY_DENIED' },
         };
       }
 
@@ -179,14 +184,14 @@ export class DefaultToolExecutor implements ToolExecutor {
           success: false,
           durationMs: Date.now() - startTime,
           error: `Policy REQUIRES_APPROVAL for tool execution: ${evaluation.reason}`,
-          metadata: { ...baseMetadata, ruleId: evaluation.ruleId, decision: evaluation.decision },
+          metadata: { ...baseMetadata, ruleId: evaluation.ruleId, decision: evaluation.decision, errorCode: 'REQUIRES_APPROVAL' },
         };
       }
     }
 
-    // 4. Timeout Enforcement & Execution
+    // 5. Timeout Enforcement & Execution
     try {
-      const executionPromise = tool.execute(request.input, fullContext);
+      const executionPromise = tool.execute(sanitizedInput, fullContext);
 
       const timeoutPromise = new Promise<ToolResult>((_, reject) => {
         const timer = setTimeout(() => {
@@ -212,8 +217,13 @@ export class DefaultToolExecutor implements ToolExecutor {
       });
 
       const res = await Promise.race([executionPromise, timeoutPromise]);
+      const scrubbedOutput = SecretScrubber.scrub(res.output);
+      const scrubbedError = res.error ? SecretScrubber.scrub(res.error) : undefined;
+
       return {
         ...res,
+        output: scrubbedOutput,
+        error: scrubbedError,
         durationMs: res.durationMs || (Date.now() - startTime),
         metadata: {
           ...baseMetadata,
@@ -224,15 +234,50 @@ export class DefaultToolExecutor implements ToolExecutor {
       const durationMs = Date.now() - startTime;
       if (err instanceof HarnessError) throw err;
 
+      const rawError = err instanceof Error ? err.message : String(err);
       return {
         toolCallId: this.idFactory.create<'ToolCall'>(),
         name: tool.definition.name,
         output: '',
         success: false,
         durationMs,
-        error: err instanceof Error ? err.message : String(err),
+        error: SecretScrubber.scrub(rawError),
         metadata: baseMetadata,
       };
     }
   }
+}
+
+/**
+ * Deep sanitization to prevent prototype pollution and null-byte injection.
+ */
+function sanitizeToolInput(input: Record<string, unknown>): Record<string, unknown> {
+  if (!input || typeof input !== 'object') return {};
+
+  const clean: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(input)) {
+    // 1. Prototype pollution guard
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      continue;
+    }
+
+    // 2. Value sanitization
+    if (typeof value === 'string') {
+      // Strip null bytes
+      clean[key] = value.replace(/\0/g, '');
+    } else if (Array.isArray(value)) {
+      clean[key] = value.map((item) => {
+        if (typeof item === 'string') return item.replace(/\0/g, '');
+        if (typeof item === 'object' && item !== null) return sanitizeToolInput(item as Record<string, unknown>);
+        return item;
+      });
+    } else if (typeof value === 'object' && value !== null) {
+      clean[key] = sanitizeToolInput(value as Record<string, unknown>);
+    } else {
+      clean[key] = value;
+    }
+  }
+
+  return clean;
 }

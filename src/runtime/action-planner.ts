@@ -6,6 +6,10 @@
  * Parses vendor-neutral ModelResponse content and tool calls into
  * explicit ActionProposal domain objects.
  * Tool identity comes strictly from registered tool definitions — no heuristic string mapping.
+ *
+ * Security:
+ * - Approval Spoofing Defense: Strips any model-injected approval flags (userApproved, permissionContext).
+ * - Prototype Pollution Defense: Filters prototype properties from parameters.
  */
 import type { IdFactory } from '../core/types/identifiers.js';
 import type { TaskId, IterationId } from '../core/types/identifiers.js';
@@ -33,21 +37,40 @@ export class ActionPlanner {
     // 1. Tool Call Proposals
     if (response.toolCalls && response.toolCalls.length > 0) {
       for (const tc of response.toolCalls) {
-        const tool = toolRegistry?.getTool(tc.name);
+        const canonicalName = (tc.name ?? '').trim().toLowerCase();
+        const tool = toolRegistry?.getTool(canonicalName) ?? toolRegistry?.getTool(tc.name);
         const actionType = tool ? mapCategoryToActionType(tool.definition.category) : ActionType.TOOL_CALL;
         const irreversible = tool
           ? tool.definition.mutating || tool.definition.riskLevel === 'HIGH' || tool.definition.riskLevel === 'CRITICAL'
           : false;
+
+        // Strip any approval spoofing or permission override keys from model input
+        const cleanInput: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(tc.input ?? {})) {
+          if (
+            k === '__proto__' ||
+            k === 'constructor' ||
+            k === 'prototype' ||
+            k.toLowerCase() === 'userapproved' ||
+            k.toLowerCase() === 'permissioncontext' ||
+            k.toLowerCase() === 'securityoverride' ||
+            k.toLowerCase() === 'isapproved' ||
+            k.toLowerCase() === 'authorized'
+          ) {
+            continue;
+          }
+          cleanInput[k] = v;
+        }
 
         proposals.push({
           id: idFactory.create<'Action'>(),
           taskId,
           iterationId,
           type: actionType,
-          description: `Execute tool [${tc.name}]`,
+          description: `Execute tool [${tc.name.trim()}]`,
           parameters: {
-            ...tc.input,
-            toolName: tc.name,
+            ...cleanInput,
+            toolName: tc.name.trim(),
             toolCallId: tc.id,
           },
           irreversible,
@@ -83,6 +106,6 @@ function mapCategoryToActionType(category: ToolCategory): ActionType {
     case ToolCategory.EXECUTE:
       return ActionType.SHELL_EXECUTE;
     default:
-      return ActionType.MODEL_CALL;
+      return ActionType.TOOL_CALL;
   }
 }

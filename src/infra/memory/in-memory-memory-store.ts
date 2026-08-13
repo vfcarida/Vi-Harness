@@ -27,6 +27,8 @@ import { InMemoryMemoryProvider } from './in-memory-memory-provider.js';
 import { MemoryLifecycle } from './memory-lifecycle.js';
 import { HarnessError } from '../../core/errors/base-error.js';
 import { ErrorCode, ErrorCategory } from '../../core/errors/error-codes.js';
+import { ContextSanitizer } from '../security/context-sanitizer.js';
+import { SecretScrubber } from '../security/secret-scrubber.js';
 
 export interface InMemoryMemoryStoreOptions {
   readonly idFactory: IdFactory;
@@ -50,6 +52,9 @@ export class InMemoryMemoryStore implements MemoryStore {
     const id = params.id ?? this.idFactory.create<'Memory'>();
     const now = this.clock.now();
 
+    // Sanitize and scrub memory content
+    const sanitizedContent = SecretScrubber.scrub(ContextSanitizer.sanitize(params.content));
+
     // Default status: SHORT_TERM unverified tool entries are CANDIDATE; explicit/semantic/procedural default to ACTIVE
     const requestedTier = params.tier ?? MemoryTier.SHORT_TERM;
     let initialStatus =
@@ -64,7 +69,7 @@ export class InMemoryMemoryStore implements MemoryStore {
       id,
       tier: initialTier,
       type: params.type,
-      content: params.content,
+      content: sanitizedContent,
       source: params.source,
       provenance: params.provenance ?? { source: params.source, timestamp: now },
       confidence: params.confidence ?? 1.0,
