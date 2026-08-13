@@ -1,0 +1,24 @@
+# CODEOWNERS
+#
+# GitHub automatically requests reviews from these owners when a PR touches
+# files that match the listed paths.
+#
+# Format: <path-pattern>  <@github-user-or-team>
+# Docs:   https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: all files → repository owner
+* @vfcarida
+
+# Core domain layer — strict review required
+src/core/ @vfcarida
+
+# Security infrastructure — heightened review
+src/infra/security/ @vfcarida
+tests/unit/security/ @vfcarida
+
+# CI / GitHub workflows
+.github/ @vfcarida
+
+# Dependency manifest — watch for unexpected changes
+package.json @vfcarida
+package-lock.json @vfcarida

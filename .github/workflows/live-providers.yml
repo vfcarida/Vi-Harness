@@ -1,0 +1,63 @@
+name: Live Provider Tests
+
+# Live provider tests are STRICTLY OPT-IN.
+#
+# They will NEVER run automatically as part of normal CI.
+# They only run when:
+#   1. Manually triggered via workflow_dispatch
+#   2. The triggering actor has set the required secrets (OPENAI_API_KEY)
+#
+# Required secrets:
+#   - OPENAI_API_KEY  — used by the OpenAICompatibleProvider integration tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "Provider to test (openai | all)"
+        required: true
+        default: openai
+        type: choice
+        options:
+          - openai
+          - all
+      model:
+        description: "Model ID to test (e.g. gpt-4o-mini)"
+        required: false
+        default: gpt-4o-mini
+        type: string
+
+jobs:
+  live-provider:
+    name: Live Provider Tests (${{ inputs.provider }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: live-providers
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Verify required secrets are present
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::OPENAI_API_KEY secret is not set. Configure it in the 'live-providers' GitHub environment."
+            exit 1
+          fi
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Run live provider tests
+        run: npx vitest run tests/live
+        env:
+          NODE_ENV: test
+          LIVE_PROVIDER_TESTS: "true"
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TEST_MODEL_ID: ${{ inputs.model }}
+          TEST_PROVIDER: ${{ inputs.provider }}
