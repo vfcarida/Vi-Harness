@@ -34,6 +34,10 @@ export {
 export type { ResilientExecutionOptions } from './model/provider-resilience.js';
 export { ScriptedModelProvider } from './model/scripted-model-provider.js';
 export type { ScriptedStep, ScriptStepHandler, ScriptedModelProviderOptions } from './model/scripted-model-provider.js';
+export { ProviderMessageAdapter } from './model/provider-message-adapter.js';
+export type { AnthropicMessage, AnthropicPayload, AnthropicToolUseBlock, AnthropicToolResultBlock } from './model/provider-message-adapter.js';
+export { SimulatedFaultModelProvider } from './model/simulated-fault-model-provider.js';
+export type { SimulatedFaultType, SimulatedFaultProviderOptions } from './model/simulated-fault-model-provider.js';
 
 // Metrics
 export { InMemoryMetricsCollector } from './metrics/in-memory-metrics-collector.js';

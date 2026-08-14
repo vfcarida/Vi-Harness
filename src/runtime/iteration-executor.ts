@@ -39,6 +39,8 @@ import { AgentEventType } from '../core/model/runtime-types.js';
 import type { AgentObserverHub } from './agent-observer.js';
 import { ActionPlanner } from './action-planner.js';
 import { TerminationController } from './termination-controller.js';
+import { ToolCallValidator } from './tool-call-validator.js';
+import { ProviderMessageAdapter } from '../infra/model/provider-message-adapter.js';
 import { executeResiliently } from '../infra/model/provider-resilience.js';
 import { StateEvent, AgentPhase } from '../core/model/state.js';
 import { TaskCategory } from '../core/model/router-types.js';
@@ -190,17 +192,34 @@ export class IterationExecutor {
       });
     }
 
-    // Append prior iteration tool results & evidence to message stream
+    // Append prior iteration assistant tool calls, tool results & evidence as structured messages
     for (const priorIter of iterationsSoFar) {
+      if (priorIter.actionProposals && priorIter.actionProposals.length > 0) {
+        const priorToolCalls = priorIter.actionProposals
+          .filter((p) => p.type !== ActionType.MODEL_CALL)
+          .map((p) => ({
+            id: String(p.parameters['toolCallId'] ?? p.id),
+            name: String(p.parameters['toolName'] ?? extractToolName(p)),
+            input: (p.parameters['input'] as Record<string, unknown>) ?? p.parameters,
+          }));
+
+        if (priorToolCalls.length > 0) {
+          messages.push(ProviderMessageAdapter.createToolCallMessage(priorToolCalls));
+        }
+      }
+
       for (const res of priorIter.toolResults) {
         const toolCallId = String(res.metadata['toolCallId'] ?? res.actionId);
         const toolName = String(res.metadata['toolName'] ?? 'tool');
-        messages.push({
-          role: MessageRole.TOOL,
-          content: res.output || (res.error ? res.error : 'Execution finished'),
-          toolCallId,
-          name: toolName,
-        });
+        const isError = res.status === ActionResultStatus.FAILURE || res.status === ActionResultStatus.DENIED;
+        messages.push(
+          ProviderMessageAdapter.createToolResultMessage({
+            toolCallId,
+            name: toolName,
+            output: res.output || (res.error ? res.error : 'Execution finished'),
+            isError,
+          }),
+        );
       }
       for (const ev of priorIter.evidenceCreated) {
         messages.push({
@@ -765,8 +784,48 @@ async function executeSingleProposalWithPolicy(
   const toolName = extractToolName(proposal);
   const toolCallId = String(proposal.parameters['toolCallId'] ?? proposal.id);
   const input = (proposal.parameters['input'] as Record<string, unknown>) ?? proposal.parameters;
-  const tool = params.toolExecutor?.getTool(toolName);
 
+  const toolRegistryAdapter = params.toolExecutor
+    ? {
+        getTool: (name: string) => params.toolExecutor?.getTool(name),
+        listTools: (cat?: any) => params.toolExecutor?.listTools(cat) ?? [],
+        validateInput: (name: string, _inp: Record<string, unknown>) => {
+          const t = params.toolExecutor?.getTool(name);
+          if (!t) return { valid: false, errors: [`Tool [${name}] is not registered in ToolRegistry`] };
+          return { valid: true };
+        },
+      }
+    : undefined;
+
+  const validation = ToolCallValidator.validate(
+    { id: toolCallId, name: toolName, input },
+    toolRegistryAdapter as any,
+  );
+
+  if (!validation.valid) {
+    const errorPayload = JSON.stringify({
+      success: false,
+      errorCode: validation.isUnknownTool ? 'UNKNOWN_TOOL' : 'TOOL_INVALID_INPUT',
+      message: validation.modelFeedbackMessage ?? validation.error ?? 'Tool execution failed',
+    });
+    return {
+      actionId: proposal.id,
+      status: ActionResultStatus.FAILURE,
+      output: errorPayload,
+      durationMs: 0,
+      error: errorPayload,
+      executedAt: clock.now(),
+      metadata: {
+        toolCallId,
+        toolName,
+        errorCode: validation.isUnknownTool ? 'UNKNOWN_TOOL' : 'TOOL_INVALID_INPUT',
+        outcome: validation.isUnknownTool ? 'UNKNOWN_TOOL' : 'TOOL_INVALID_INPUT',
+        modelFeedbackMessage: validation.modelFeedbackMessage,
+      },
+    };
+  }
+
+  const tool = validation.tool ?? params.toolExecutor?.getTool(toolName);
   if (!tool) {
     const errorPayload = JSON.stringify({
       success: false,

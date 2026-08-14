@@ -26,12 +26,12 @@ import type {
 } from '../../core/model/model-io.js';
 import {
   FinishReason,
-  MessageRole,
   ModelCapability,
   ProviderHealthStatus,
 } from '../../core/model/model-io.js';
 import { HarnessError } from '../../core/errors/base-error.js';
 import { ErrorCode, ErrorCategory } from '../../core/errors/error-codes.js';
+import { ProviderMessageAdapter } from './provider-message-adapter.js';
 
 export interface OpenAICompatibleProviderOptions {
   readonly providerId?: string;
@@ -253,27 +253,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
   }
 
   private buildPayload(request: ModelRequest, stream: boolean): Record<string, unknown> {
-    const messages: Record<string, unknown>[] = [];
-
-    if (request.systemPrompt) {
-      messages.push({ role: 'system', content: request.systemPrompt });
-    }
-
-    for (const m of request.messages) {
-      const roleMap: Record<MessageRole, string> = {
-        [MessageRole.SYSTEM]: 'system',
-        [MessageRole.USER]: 'user',
-        [MessageRole.ASSISTANT]: 'assistant',
-        [MessageRole.TOOL]: 'tool',
-      };
-      const msgObj: Record<string, unknown> = {
-        role: roleMap[m.role] ?? 'user',
-        content: m.content,
-      };
-      if (m.toolCallId) msgObj['tool_call_id'] = m.toolCallId;
-      if (m.name) msgObj['name'] = m.name;
-      messages.push(msgObj);
-    }
+    const messages = ProviderMessageAdapter.toOpenAIMessages(request);
 
     const payload: Record<string, unknown> = {
       model: request.modelId ?? this.defaultModelId,

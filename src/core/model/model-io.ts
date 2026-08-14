@@ -50,7 +50,9 @@ export enum MessageRole {
   SYSTEM = 'SYSTEM',
   USER = 'USER',
   ASSISTANT = 'ASSISTANT',
-  TOOL = 'TOOL',
+  TOOL_CALL = 'TOOL_CALL',
+  TOOL_RESULT = 'TOOL_RESULT',
+  TOOL = 'TOOL_RESULT', // Backward-compatible alias for TOOL_RESULT
 }
 
 export interface ModelMessage {
@@ -58,6 +60,14 @@ export interface ModelMessage {
   readonly content: string;
   readonly toolCallId?: string;
   readonly name?: string;
+  readonly toolCalls?: ReadonlyArray<ToolCall>;
+  readonly toolResult?: {
+    readonly toolCallId: string;
+    readonly name: string;
+    readonly output: string;
+    readonly isError?: boolean;
+  };
+  readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 // ---------------------------------------------------------------------------

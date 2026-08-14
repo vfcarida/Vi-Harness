@@ -303,7 +303,9 @@ describe('Realistic Behavioral Agent Workflows Suite', { timeout: 30000 }, () =>
       },
       // Turn 2: Synthesize findings
       (request: any) => {
-        const toolMessages = request.messages.filter((m: any) => m.role === MessageRole.TOOL);
+        const toolMessages = request.messages.filter(
+          (m: any) => m.role === MessageRole.TOOL || m.role === MessageRole.TOOL_RESULT,
+        );
         if (toolMessages.length >= 2) {
           sawBothFiles = true;
         }
