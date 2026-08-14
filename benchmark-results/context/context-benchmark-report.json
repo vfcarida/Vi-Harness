@@ -1,6 +1,6 @@
 {
   "suiteId": "context-efficiency-suite-v1",
-  "generatedAt": "2026-08-14T13:16:56.532Z",
+  "generatedAt": "2026-08-14T19:27:29.728Z",
   "horizons": [
     10,
     25,
@@ -464,7 +464,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 12
+          "durationMs": 27
         }
       },
       "viVsNaiveTokenSavingsPercent": 82.7,
@@ -821,7 +821,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 1
+          "durationMs": 4
         },
         "PI_COMPACTION": {
           "strategy": "PI_COMPACTION",
@@ -1168,7 +1168,7 @@
             "CM-003"
           ],
           "taskSuccess": false,
-          "durationMs": 0
+          "durationMs": 1
         },
         "VI_CONTEXT_COMPILER": {
           "strategy": "VI_CONTEXT_COMPILER",
@@ -1515,7 +1515,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 22
+          "durationMs": 61
         }
       },
       "viVsNaiveTokenSavingsPercent": 85.2,
@@ -2198,7 +2198,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 4
+          "durationMs": 8
         },
         "PI_COMPACTION": {
           "strategy": "PI_COMPACTION",
@@ -2871,7 +2871,7 @@
             "CM-004"
           ],
           "taskSuccess": false,
-          "durationMs": 0
+          "durationMs": 3
         },
         "VI_CONTEXT_COMPILER": {
           "strategy": "VI_CONTEXT_COMPILER",
@@ -3544,7 +3544,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 48
+          "durationMs": 287
         }
       },
       "viVsNaiveTokenSavingsPercent": 86,
@@ -4878,7 +4878,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 17
+          "durationMs": 41
         },
         "PI_COMPACTION": {
           "strategy": "PI_COMPACTION",
@@ -6202,7 +6202,7 @@
             "CM-005"
           ],
           "taskSuccess": false,
-          "durationMs": 2
+          "durationMs": 5
         },
         "VI_CONTEXT_COMPILER": {
           "strategy": "VI_CONTEXT_COMPILER",
@@ -7526,7 +7526,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 140
+          "durationMs": 433
         }
       },
       "viVsNaiveTokenSavingsPercent": 87.1,

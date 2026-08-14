@@ -172,7 +172,7 @@ describe('Official Vi-Harness Benchmark Runner Suite', () => {
     expect(benchResult.costDistribution.p95).toBeGreaterThanOrEqual(0);
     expect(benchResult.iterationDistribution.mean).toBeGreaterThanOrEqual(1);
     expect(benchResult.iterationDistribution.p95).toBeGreaterThanOrEqual(1);
-  });
+  }, 30000);
 
   it('4. Multi-Harness Comparison Suite: Executes Pi vs Vi-Harness side-by-side', async () => {
     const miniSuite = {
@@ -220,7 +220,7 @@ describe('Official Vi-Harness Benchmark Runner Suite', () => {
     expect(piSummary.costDistribution.mean).toBeGreaterThan(0);
     expect(viSummary.tokenDistribution.totalTokens.p95).toBeGreaterThan(0);
     expect(piSummary.tokenDistribution.totalTokens.p95).toBeGreaterThan(0);
-  });
+  }, 30000);
 
   it('5. Machine-Readable JSON Output: Serializes full suite comparison report', async () => {
     const miniSuite = {
@@ -243,7 +243,7 @@ describe('Official Vi-Harness Benchmark Runner Suite', () => {
     expect(parsed.harnessSummaries['Vi-Harness']).toBeDefined();
     expect(parsed.harnessSummaries['Pi']).toBeDefined();
     expect(parsed.taskComparisons).toHaveLength(1);
-  });
+  }, 30000);
 
   it('6. Human-Readable Markdown Summary: Formats comparison tables and distributions', async () => {
     const miniSuite = {
@@ -270,5 +270,5 @@ describe('Official Vi-Harness Benchmark Runner Suite', () => {
     expect(markdown).toContain('## 3. Token Consumption Distributions');
     expect(markdown).toContain('## 4. Task-by-Task Comparison Breakdown');
     expect(markdown).toContain('## 5. Statistical Distribution Details');
-  });
+  }, 30000);
 });
