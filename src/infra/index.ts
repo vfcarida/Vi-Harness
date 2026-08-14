@@ -185,3 +185,22 @@ export { PrefixCachingCompiler } from './compiler/prefix-caching-compiler.js';
 export type { PrefixCachingCompilerInput } from './compiler/prefix-caching-compiler.js';
 export { ImpactedTestSelector } from './verification/impacted-test-selector.js';
 export type { TestSelectionRule } from './verification/impacted-test-selector.js';
+
+// Meta-Harness Outer-Loop Diagnostic & Telemetry
+export { TraceDistiller } from './telemetry/trace-distiller.js';
+export type { ToolPerformanceMetrics, CausalTraceAnalysis } from './telemetry/trace-distiller.js';
+export { HarnessDiagnosticEngine } from './telemetry/harness-diagnostic-engine.js';
+export type { HarnessRecommendation, HarnessDiagnosticReport } from './telemetry/harness-diagnostic-engine.js';
+
+// Dynamic Context Budget Balancer
+export { ContextBudgetBalancer } from './compiler/context-budget-balancer.js';
+export type { TierAllocation, BalancedContextBudget } from './compiler/context-budget-balancer.js';
+
+// Streaming Tool Parser
+export { StreamingToolParser } from './model/streaming-tool-parser.js';
+export type { IncrementalToolState } from './model/streaming-tool-parser.js';
+
+// Cryptographic Audit Integrity
+export { AuditIntegritySigner } from './security/audit-integrity-signer.js';
+export type { SignedAuditPayload } from './security/audit-integrity-signer.js';
+

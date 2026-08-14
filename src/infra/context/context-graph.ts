@@ -165,6 +165,64 @@ export class ContextGraph {
     return result;
   }
 
+  /**
+   * Semantically subsume a redundant secondary context object into a primary object.
+   * Redirects inbound and outbound relations to the primary node and removes the redundant node.
+   */
+  subsume(primaryId: ContextId, secondaryId: ContextId): boolean {
+    if (!this.hasNode(primaryId) || !this.hasNode(secondaryId) || primaryId === secondaryId) {
+      return false;
+    }
+
+    // Re-link outbound relations
+    const outRels = this.getRelationsFrom(secondaryId);
+    for (const r of outRels) {
+      this.removeRelation(r.id);
+      this.addRelation({
+        ...r,
+        sourceId: primaryId,
+      });
+    }
+
+    // Re-link inbound relations
+    const inRels = this.getRelationsTo(secondaryId);
+    for (const r of inRels) {
+      this.removeRelation(r.id);
+      this.addRelation({
+        ...r,
+        targetId: primaryId,
+      });
+    }
+
+    // Remove secondary node
+    this.nodes.delete(secondaryId);
+    this.outbound.delete(secondaryId);
+    this.inbound.delete(secondaryId);
+    return true;
+  }
+
+  /**
+   * Group context nodes sharing a specific tag or metadata topic.
+   */
+  clusterByTopic(topicTag: string): ReadonlyArray<ContextObject> {
+    const cleanTag = topicTag.toLowerCase().trim();
+    const cluster: ContextObject[] = [];
+
+    for (const node of this.nodes.values()) {
+      const hasTag = node.tags.some((t) => t.toLowerCase() === cleanTag);
+      const metaTopic = String(node.metadata?.['topic'] ?? '').toLowerCase();
+      if (hasTag || metaTopic === cleanTag) {
+        cluster.push(node);
+      }
+    }
+
+    return cluster;
+  }
+
+  getAllNodes(): ReadonlyArray<ContextObject> {
+    return Array.from(this.nodes.values());
+  }
+
   clear(): void {
     this.nodes.clear();
     this.relations.clear();

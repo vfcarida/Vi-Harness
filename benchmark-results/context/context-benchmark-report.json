@@ -1,6 +1,6 @@
 {
   "suiteId": "context-efficiency-suite-v1",
-  "generatedAt": "2026-08-14T00:40:11.687Z",
+  "generatedAt": "2026-08-14T13:16:56.532Z",
   "horizons": [
     10,
     25,
@@ -162,7 +162,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 0
+          "durationMs": 1
         },
         "PI_COMPACTION": {
           "strategy": "PI_COMPACTION",
@@ -464,7 +464,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 14
+          "durationMs": 12
         }
       },
       "viVsNaiveTokenSavingsPercent": 82.7,
@@ -821,7 +821,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 2
+          "durationMs": 1
         },
         "PI_COMPACTION": {
           "strategy": "PI_COMPACTION",
@@ -1168,7 +1168,7 @@
             "CM-003"
           ],
           "taskSuccess": false,
-          "durationMs": 1
+          "durationMs": 0
         },
         "VI_CONTEXT_COMPILER": {
           "strategy": "VI_CONTEXT_COMPILER",
@@ -1515,7 +1515,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 28
+          "durationMs": 22
         }
       },
       "viVsNaiveTokenSavingsPercent": 85.2,
@@ -3544,7 +3544,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 66
+          "durationMs": 48
         }
       },
       "viVsNaiveTokenSavingsPercent": 86,
@@ -4878,7 +4878,7 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 30
+          "durationMs": 17
         },
         "PI_COMPACTION": {
           "strategy": "PI_COMPACTION",
@@ -7083,12 +7083,12 @@
             {
               "iteration": 68,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 8691,
+              "contextTokens": 8618,
               "modelCalls": 68,
-              "cumulativeTokens": 310671,
-              "peakContextTokens": 8691,
-              "compressionRatio": 0.13884273755511534,
-              "cumulativeTokenRatio": 0.1394240133270743,
+              "cumulativeTokens": 310598,
+              "peakContextTokens": 8618,
+              "compressionRatio": 0.13767652885168383,
+              "cumulativeTokenRatio": 0.1393912521328435,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7096,12 +7096,12 @@
             {
               "iteration": 69,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 8804,
+              "contextTokens": 8658,
               "modelCalls": 69,
-              "cumulativeTokens": 319475,
-              "peakContextTokens": 8804,
-              "compressionRatio": 0.1404213917731311,
-              "cumulativeTokenRatio": 0.13945130891514979,
+              "cumulativeTokens": 319256,
+              "peakContextTokens": 8658,
+              "compressionRatio": 0.13809273170965117,
+              "cumulativeTokenRatio": 0.13935571509199488,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7109,12 +7109,12 @@
             {
               "iteration": 70,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 8917,
+              "contextTokens": 8698,
               "modelCalls": 70,
-              "cumulativeTokens": 328392,
-              "peakContextTokens": 8917,
-              "compressionRatio": 0.14199722916699842,
-              "cumulativeTokenRatio": 0.1395192332203217,
+              "cumulativeTokens": 327954,
+              "peakContextTokens": 8698,
+              "compressionRatio": 0.1385098014236349,
+              "cumulativeTokenRatio": 0.13933314639679828,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7122,12 +7122,12 @@
             {
               "iteration": 71,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 9030,
+              "contextTokens": 8738,
               "modelCalls": 71,
-              "cumulativeTokens": 337422,
-              "peakContextTokens": 9030,
-              "compressionRatio": 0.14356805571012926,
-              "cumulativeTokenRatio": 0.13962461056418485,
+              "cumulativeTokens": 336692,
+              "peakContextTokens": 8738,
+              "compressionRatio": 0.13892554493855033,
+              "cumulativeTokenRatio": 0.13932253789046514,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7135,12 +7135,12 @@
             {
               "iteration": 72,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 9168,
+              "contextTokens": 8803,
               "modelCalls": 72,
-              "cumulativeTokens": 346590,
-              "peakContextTokens": 9168,
-              "compressionRatio": 0.13685829016704235,
-              "cumulativeTokenRatio": 0.13954999665811196,
+              "cumulativeTokens": 345495,
+              "peakContextTokens": 8803,
+              "compressionRatio": 0.13140963441759096,
+              "cumulativeTokenRatio": 0.13910910902044027,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7148,12 +7148,12 @@
             {
               "iteration": 73,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 9281,
+              "contextTokens": 8843,
               "modelCalls": 73,
-              "cumulativeTokens": 355871,
-              "peakContextTokens": 9281,
-              "compressionRatio": 0.13833862481181713,
-              "cumulativeTokenRatio": 0.1395181351111355,
+              "cumulativeTokens": 354338,
+              "peakContextTokens": 8843,
+              "compressionRatio": 0.1318099837529252,
+              "cumulativeTokenRatio": 0.1389171271584634,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7161,12 +7161,12 @@
             {
               "iteration": 74,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 9394,
+              "contextTokens": 8883,
               "modelCalls": 74,
-              "cumulativeTokens": 365265,
-              "peakContextTokens": 9394,
-              "compressionRatio": 0.1398145529774219,
-              "cumulativeTokenRatio": 0.13952574273158985,
+              "cumulativeTokens": 363221,
+              "peakContextTokens": 8883,
+              "compressionRatio": 0.1322091413773088,
+              "cumulativeTokenRatio": 0.13874496543799925,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7174,12 +7174,12 @@
             {
               "iteration": 75,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 9552,
+              "contextTokens": 8895,
               "modelCalls": 75,
-              "cumulativeTokens": 374817,
-              "peakContextTokens": 9552,
-              "compressionRatio": 0.1357319464574985,
-              "cumulativeTokenRatio": 0.13942642836789945,
+              "cumulativeTokens": 372116,
+              "peakContextTokens": 8895,
+              "compressionRatio": 0.1263961122005286,
+              "cumulativeTokenRatio": 0.13842169597043164,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7187,12 +7187,12 @@
             {
               "iteration": 76,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 9665,
+              "contextTokens": 8935,
               "modelCalls": 76,
-              "cumulativeTokens": 384482,
-              "peakContextTokens": 9665,
-              "compressionRatio": 0.13658267738790045,
-              "cumulativeTokenRatio": 0.13935349275346035,
+              "cumulativeTokens": 381051,
+              "peakContextTokens": 8935,
+              "compressionRatio": 0.1262665517290109,
+              "cumulativeTokenRatio": 0.13810994472354707,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7200,12 +7200,12 @@
             {
               "iteration": 77,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 9778,
+              "contextTokens": 8975,
               "modelCalls": 77,
-              "cumulativeTokens": 394260,
-              "peakContextTokens": 9778,
-              "compressionRatio": 0.1379845617600158,
-              "cumulativeTokenRatio": 0.1393192136553042,
+              "cumulativeTokens": 390026,
+              "peakContextTokens": 8975,
+              "compressionRatio": 0.12665283716466985,
+              "cumulativeTokenRatio": 0.1378230498278387,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7213,12 +7213,12 @@
             {
               "iteration": 78,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 9916,
+              "contextTokens": 9040,
               "modelCalls": 78,
-              "cumulativeTokens": 404176,
-              "peakContextTokens": 9916,
-              "compressionRatio": 0.13280475718533202,
-              "cumulativeTokenRatio": 0.1391517505172883,
+              "cumulativeTokens": 399066,
+              "peakContextTokens": 9040,
+              "compressionRatio": 0.12107250957597836,
+              "cumulativeTokenRatio": 0.13739245396048297,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7226,12 +7226,12 @@
             {
               "iteration": 79,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 10029,
+              "contextTokens": 9080,
               "modelCalls": 79,
-              "cumulativeTokens": 414205,
-              "peakContextTokens": 10029,
-              "compressionRatio": 0.13413851215793274,
-              "cumulativeTokenRatio": 0.13902594403585228,
+              "cumulativeTokens": 408146,
+              "peakContextTokens": 9080,
+              "compressionRatio": 0.12144557686649012,
+              "cumulativeTokenRatio": 0.13699226941842074,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7239,12 +7239,12 @@
             {
               "iteration": 80,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 10142,
+              "contextTokens": 9120,
               "modelCalls": 80,
-              "cumulativeTokens": 424347,
-              "peakContextTokens": 10142,
-              "compressionRatio": 0.13466466612669792,
-              "cumulativeTokenRatio": 0.1389184158310824,
+              "cumulativeTokens": 417266,
+              "peakContextTokens": 9120,
+              "compressionRatio": 0.12109463173688473,
+              "cumulativeTokenRatio": 0.13660030988830468,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7252,12 +7252,12 @@
             {
               "iteration": 81,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 10255,
+              "contextTokens": 9160,
               "modelCalls": 81,
-              "cumulativeTokens": 434602,
-              "peakContextTokens": 10255,
-              "compressionRatio": 0.13598451195417235,
-              "cumulativeTokenRatio": 0.138847728894827,
+              "cumulativeTokens": 426426,
+              "peakContextTokens": 9160,
+              "compressionRatio": 0.12146446899075757,
+              "cumulativeTokenRatio": 0.1362356400608039,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7265,12 +7265,12 @@
             {
               "iteration": 82,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 10368,
+              "contextTokens": 9200,
               "modelCalls": 82,
-              "cumulativeTokens": 444970,
-              "peakContextTokens": 10368,
-              "compressionRatio": 0.13730086210321402,
-              "cumulativeTokenRatio": 0.13881128970621495,
+              "cumulativeTokens": 435626,
+              "peakContextTokens": 9200,
+              "compressionRatio": 0.12183332671195689,
+              "cumulativeTokenRatio": 0.13589636804629435,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7278,12 +7278,12 @@
             {
               "iteration": 83,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 10481,
+              "contextTokens": 9240,
               "modelCalls": 83,
-              "cumulativeTokens": 455451,
-              "peakContextTokens": 10481,
-              "compressionRatio": 0.13861189726770176,
-              "cumulativeTokenRatio": 0.13880669476826846,
+              "cumulativeTokens": 444866,
+              "peakContextTokens": 9240,
+              "compressionRatio": 0.12219959266802444,
+              "cumulativeTokenRatio": 0.13558073003414312,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7291,12 +7291,12 @@
             {
               "iteration": 84,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 10619,
+              "contextTokens": 9305,
               "modelCalls": 84,
-              "cumulativeTokens": 466070,
-              "peakContextTokens": 10619,
-              "compressionRatio": 0.13322878113041842,
-              "cumulativeTokenRatio": 0.13867441222484256,
+              "cumulativeTokens": 454171,
+              "peakContextTokens": 9305,
+              "compressionRatio": 0.11674298977479455,
+              "cumulativeTokenRatio": 0.1351339851837041,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7304,12 +7304,12 @@
             {
               "iteration": 85,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 10732,
+              "contextTokens": 9345,
               "modelCalls": 85,
-              "cumulativeTokens": 476802,
-              "peakContextTokens": 10732,
-              "compressionRatio": 0.13447778961217968,
-              "cumulativeTokenRatio": 0.13857707401897115,
+              "cumulativeTokens": 463516,
+              "peakContextTokens": 9345,
+              "compressionRatio": 0.11709792619510055,
+              "cumulativeTokenRatio": 0.13471564934915842,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7317,12 +7317,12 @@
             {
               "iteration": 86,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 10845,
+              "contextTokens": 9385,
               "modelCalls": 86,
-              "cumulativeTokens": 487647,
-              "peakContextTokens": 10845,
-              "compressionRatio": 0.1357219733186494,
-              "cumulativeTokenRatio": 0.1385122727485759,
+              "cumulativeTokens": 472901,
+              "peakContextTokens": 9385,
+              "compressionRatio": 0.11745050434260255,
+              "cumulativeTokenRatio": 0.1343237880989205,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7330,12 +7330,12 @@
             {
               "iteration": 87,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 10958,
+              "contextTokens": 9425,
               "modelCalls": 87,
-              "cumulativeTokens": 498605,
-              "peakContextTokens": 10958,
-              "compressionRatio": 0.13696472764542658,
-              "cumulativeTokenRatio": 0.13847788611432893,
+              "cumulativeTokens": 482326,
+              "peakContextTokens": 9425,
+              "compressionRatio": 0.11780366472514561,
+              "cumulativeTokenRatio": 0.133956709014109,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7343,12 +7343,12 @@
             {
               "iteration": 88,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 11071,
+              "contextTokens": 9465,
               "modelCalls": 88,
-              "cumulativeTokens": 509676,
-              "peakContextTokens": 11071,
-              "compressionRatio": 0.13770756887866162,
-              "cumulativeTokenRatio": 0.1384610620031589,
+              "cumulativeTokens": 491791,
+              "peakContextTokens": 9465,
+              "compressionRatio": 0.11773120218919086,
+              "cumulativeTokenRatio": 0.13360233588317977,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7356,12 +7356,12 @@
             {
               "iteration": 89,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 11184,
+              "contextTokens": 9505,
               "modelCalls": 89,
-              "cumulativeTokens": 520860,
-              "peakContextTokens": 11184,
-              "compressionRatio": 0.13894030685135722,
-              "cumulativeTokenRatio": 0.13847131770003518,
+              "cumulativeTokens": 501296,
+              "peakContextTokens": 9505,
+              "compressionRatio": 0.11808186843903348,
+              "cumulativeTokenRatio": 0.13327020250692476,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7369,12 +7369,12 @@
             {
               "iteration": 90,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 11322,
+              "contextTokens": 9570,
               "modelCalls": 90,
-              "cumulativeTokens": 532182,
-              "peakContextTokens": 11322,
-              "compressionRatio": 0.13430923628081332,
-              "cumulativeTokenRatio": 0.13838008694682172,
+              "cumulativeTokens": 510866,
+              "peakContextTokens": 9570,
+              "compressionRatio": 0.11352582504923012,
+              "cumulativeTokenRatio": 0.1328374155799614,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7382,12 +7382,12 @@
             {
               "iteration": 91,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 11435,
+              "contextTokens": 9610,
               "modelCalls": 91,
-              "cumulativeTokens": 543617,
-              "peakContextTokens": 11435,
-              "compressionRatio": 0.13548899263015712,
-              "cumulativeTokenRatio": 0.13831800288891372,
+              "cumulativeTokens": 520476,
+              "peakContextTokens": 9610,
+              "compressionRatio": 0.11386525747055617,
+              "cumulativeTokenRatio": 0.13243000287262954,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7395,12 +7395,12 @@
             {
               "iteration": 92,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 11548,
+              "contextTokens": 9650,
               "modelCalls": 92,
-              "cumulativeTokens": 555165,
-              "peakContextTokens": 11548,
-              "compressionRatio": 0.13620012501916567,
-              "cumulativeTokenRatio": 0.1382732782994901,
+              "cumulativeTokens": 530126,
+              "peakContextTokens": 9650,
+              "compressionRatio": 0.11381461780697513,
+              "cumulativeTokenRatio": 0.13203688981076886,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7408,12 +7408,12 @@
             {
               "iteration": 93,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 11661,
+              "contextTokens": 9690,
               "modelCalls": 93,
-              "cumulativeTokens": 566826,
-              "peakContextTokens": 11661,
-              "compressionRatio": 0.13737085772850965,
-              "cumulativeTokenRatio": 0.13825459386405084,
+              "cumulativeTokens": 539816,
+              "peakContextTokens": 9690,
+              "compressionRatio": 0.11415175468564091,
+              "cumulativeTokenRatio": 0.13166658170464388,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7421,12 +7421,12 @@
             {
               "iteration": 94,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 11774,
+              "contextTokens": 9730,
               "modelCalls": 94,
-              "cumulativeTokens": 578600,
-              "peakContextTokens": 11774,
-              "compressionRatio": 0.13853720525250623,
-              "cumulativeTokenRatio": 0.13826033326331902,
+              "cumulativeTokens": 549546,
+              "peakContextTokens": 9730,
+              "compressionRatio": 0.1144867510707394,
+              "cumulativeTokenRatio": 0.13131768597221555,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7434,12 +7434,12 @@
             {
               "iteration": 95,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 11887,
+              "contextTokens": 9770,
               "modelCalls": 95,
-              "cumulativeTokens": 590487,
-              "peakContextTokens": 11887,
-              "compressionRatio": 0.13970242572395639,
-              "cumulativeTokenRatio": 0.13828907009852814,
+              "cumulativeTokens": 559316,
+              "peakContextTokens": 9770,
+              "compressionRatio": 0.1148223016171493,
+              "cumulativeTokenRatio": 0.1309889794885042,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7447,12 +7447,12 @@
             {
               "iteration": 96,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 12025,
+              "contextTokens": 9835,
               "modelCalls": 96,
-              "cumulativeTokens": 602512,
-              "peakContextTokens": 12025,
-              "compressionRatio": 0.13484116215701006,
-              "cumulativeTokenRatio": 0.1382185327976296,
+              "cumulativeTokens": 569151,
+              "peakContextTokens": 9835,
+              "compressionRatio": 0.11028381121115957,
+              "cumulativeTokenRatio": 0.13056539315449933,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7460,12 +7460,12 @@
             {
               "iteration": 97,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 12138,
+              "contextTokens": 9875,
               "modelCalls": 97,
-              "cumulativeTokens": 614650,
-              "peakContextTokens": 12138,
-              "compressionRatio": 0.13595430107526882,
-              "cumulativeTokenRatio": 0.13817308941674838,
+              "cumulativeTokens": 579026,
+              "peakContextTokens": 9875,
+              "compressionRatio": 0.11060707885304659,
+              "cumulativeTokenRatio": 0.13016482758093573,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7473,12 +7473,12 @@
             {
               "iteration": 98,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 12251,
+              "contextTokens": 9915,
               "modelCalls": 98,
-              "cumulativeTokens": 626901,
-              "peakContextTokens": 12251,
-              "compressionRatio": 0.1370664578205415,
-              "cumulativeTokenRatio": 0.13815129228218342,
+              "cumulativeTokens": 588941,
+              "peakContextTokens": 9915,
+              "compressionRatio": 0.11093085701499217,
+              "cumulativeTokenRatio": 0.12978597933000807,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7486,12 +7486,12 @@
             {
               "iteration": 99,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 12364,
+              "contextTokens": 9955,
               "modelCalls": 99,
-              "cumulativeTokens": 639265,
-              "peakContextTokens": 12364,
-              "compressionRatio": 0.13817612874385338,
-              "cumulativeTokenRatio": 0.13815177255856914,
+              "cumulativeTokens": 598896,
+              "peakContextTokens": 9955,
+              "compressionRatio": 0.11125391148860081,
+              "cumulativeTokenRatio": 0.1294276144920132,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
@@ -7499,23 +7499,23 @@
             {
               "iteration": 100,
               "strategy": "VI_CONTEXT_COMPILER",
-              "contextTokens": 12477,
+              "contextTokens": 9995,
               "modelCalls": 100,
-              "cumulativeTokens": 651742,
-              "peakContextTokens": 12477,
-              "compressionRatio": 0.13883387114721263,
-              "cumulativeTokenRatio": 0.13816476777434444,
+              "cumulativeTokens": 608891,
+              "peakContextTokens": 9995,
+              "compressionRatio": 0.11121620117948147,
+              "cumulativeTokenRatio": 0.1290806540239671,
               "retainedCriticalFacts": 5,
               "totalCriticalFactsInjected": 5,
               "retentionRate": 1
             }
           ],
           "initialContextTokens": 168,
-          "finalContextTokens": 12477,
-          "peakContextTokens": 12477,
-          "totalCumulativeTokens": 651742,
-          "averageContextTokens": 6517,
-          "averageCompressionRatio": 0.171,
+          "finalContextTokens": 9995,
+          "peakContextTokens": 9995,
+          "totalCumulativeTokens": 608891,
+          "averageContextTokens": 6089,
+          "averageCompressionRatio": 0.165,
           "criticalMemoryRetentionScore": 1,
           "retainedFacts": [
             "CM-001",
@@ -7526,17 +7526,17 @@
           ],
           "lostFacts": [],
           "taskSuccess": true,
-          "durationMs": 165
+          "durationMs": 140
         }
       },
-      "viVsNaiveTokenSavingsPercent": 86.2,
-      "viVsPiTokenSavingsPercent": -196.1,
+      "viVsNaiveTokenSavingsPercent": 87.1,
+      "viVsPiTokenSavingsPercent": -176.6,
       "viVsPiRetentionDeltaPercent": 100
     }
   },
   "executiveSummary": {
-    "overallViVsNaiveSavingsPercent": 85.025,
-    "overallViVsPiSavingsPercent": -71.025,
+    "overallViVsNaiveSavingsPercent": 85.25,
+    "overallViVsPiSavingsPercent": -66.15,
     "overallViRetentionRate": 1,
     "overallPiRetentionRate": 0,
     "overallNaiveRetentionRate": 1

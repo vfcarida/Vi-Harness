@@ -75,7 +75,38 @@ export class SecretScrubber {
       scrubbed = scrubbed.replace(pattern, replacement);
     }
 
+    // High-Entropy Token Redaction (detects random base64/hex keys >= 32 chars with entropy > 4.5)
+    scrubbed = scrubbed.replace(/\b[A-Za-z0-9+/=_-]{32,}\b/g, (token) => {
+      // Don't redact common hash or normal words if entropy is low
+      const entropy = SecretScrubber.calculateShannonEntropy(token);
+      if (entropy >= 4.5) {
+        return '[REDACTED_HIGH_ENTROPY_SECRET]';
+      }
+      return token;
+    });
+
     return scrubbed;
+  }
+
+  /**
+   * Calculate Shannon entropy of a string (bits per character).
+   */
+  static calculateShannonEntropy(str: string): number {
+    if (!str || str.length === 0) return 0;
+
+    const frequencies = new Map<string, number>();
+    for (const char of str) {
+      frequencies.set(char, (frequencies.get(char) ?? 0) + 1);
+    }
+
+    let entropy = 0;
+    const len = str.length;
+    for (const count of frequencies.values()) {
+      const p = count / len;
+      entropy -= p * Math.log2(p);
+    }
+
+    return entropy;
   }
 
   /**

@@ -3,15 +3,15 @@
 **Benchmark Objective**: Empirically evaluate whether the **Vi-Harness Context Compiler** eliminates context bloat while preserving critical domain memory across long-horizon trajectories (10, 25, 50, 100 iterations) compared to **Naive Transcript Accumulation** and **Pi-style Sliding Window Compaction**.
 
 - **Suite ID**: `context-efficiency-suite-v1`
-- **Generated At**: `2026-08-14T00:40:11.687Z`
+- **Generated At**: `2026-08-14T13:16:56.532Z`
 - **Evaluated Horizons**: 10 iterations, 25 iterations, 50 iterations, 100 iterations
 
 ## 1. Executive Comparison Summary
 
 | Strategy | Overall Token Savings vs Naive | Overall Token Savings vs Pi | Critical Memory Retention Rate | Peak Context Scaling |
 | :--- | :--- | :--- | :--- | :--- |
-| **3. Vi-Harness Context Compiler** | **85.0% savings** | **-71.0% savings** | **100.0% (100% Preserved)** | **Sublinear / Bounded** |
-| **2. Pi-style Compaction Baseline** | 60.9% savings | Baseline (0.0%) | 0.0% (Degrades on horizon) | Bounded with loss |
+| **3. Vi-Harness Context Compiler** | **85.3% savings** | **-66.2% savings** | **100.0% (100% Preserved)** | **Sublinear / Bounded** |
+| **2. Pi-style Compaction Baseline** | 60.2% savings | Baseline (0.0%) | 0.0% (Degrades on horizon) | Bounded with loss |
 | **1. Naive Transcript Accumulation** | Baseline (0.0%) | - | 100.0% (Unbounded growth) | Linear $O(N)$ Bloat |
 
 ## 2. Multi-Horizon Scaling Analysis
@@ -32,7 +32,7 @@
 | | | | | | | |
 | **100 iters** | Naive Accumulation | 89.870 | 89.870 | 4.717.136 | 1.000 | 100.0% |
 | **100 iters** | Pi-style Compaction | 2.221 | 3.709 | 220.127 | 0.088 | 0.0% |
-| **100 iters** | **Vi-Harness Context Compiler** | **12.477** | **12.477** | **651.742** | **0.171** | **100.0%** |
+| **100 iters** | **Vi-Harness Context Compiler** | **9.995** | **9.995** | **608.891** | **0.165** | **100.0%** |
 | | | | | | | |
 
 ## 3. Trajectory Curve: Iteration vs Active Context Size (Tokens)
@@ -61,8 +61,8 @@ Context Size (Tokens)
 | Iter **10** | 8.674 | 727 | **1.511** | 0.174x | 2.078x |
 | Iter **25** | 25.769 | 2.874 | **3.419** | 0.133x | 1.190x |
 | Iter **50** | 48.148 | 3.295 | **6.483** | 0.135x | 1.968x |
-| Iter **75** | 70.374 | 1.662 | **9.552** | 0.136x | 5.747x |
-| Iter **100** | 89.870 | 2.221 | **12.477** | 0.139x | 5.618x |
+| Iter **75** | 70.374 | 1.662 | **8.895** | 0.126x | 5.352x |
+| Iter **100** | 89.870 | 2.221 | **9.995** | 0.111x | 4.500x |
 
 ## 4. Trajectory Curve: Iteration vs Cumulative Tokens Submitted
 
@@ -73,8 +73,8 @@ Context Size (Tokens)
 | Iter **10** | 50.201 | 8.821 | **8.741** | **82.6%** |
 | Iter **25** | 316.829 | 40.041 | **47.102** | **85.1%** |
 | Iter **50** | 1.230.675 | 100.279 | **173.073** | **85.9%** |
-| Iter **75** | 2.688.278 | 163.595 | **374.817** | **86.1%** |
-| Iter **100** | 4.717.136 | 220.127 | **651.742** | **86.2%** |
+| Iter **75** | 2.688.278 | 163.595 | **372.116** | **86.2%** |
+| Iter **100** | 4.717.136 | 220.127 | **608.891** | **87.1%** |
 
 ## 5. Critical Memory Survival & Retention Analysis
 
