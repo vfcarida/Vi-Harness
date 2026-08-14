@@ -190,7 +190,7 @@ export class DefaultContextCompiler implements ContextCompiler {
           const mem = scored.record;
           if (
             (mem.status === MemoryStatus.ACTIVE || mem.status === MemoryStatus.PROMOTED) &&
-            (scored.scoreBreakdown.textSimilarity > 0 || scored.relevanceScore >= 0.75)
+            ((scored.scoreBreakdown?.textSimilarity ?? 0) > 0 || scored.relevanceScore >= 0.75)
           ) {
             candidates.push({
               id: this.idFactory.create<'Context'>(),
@@ -255,8 +255,8 @@ export class DefaultContextCompiler implements ContextCompiler {
       if (renderedMap.length > 0) {
         candidates.push({
           id: this.idFactory.create<'Context'>(),
-          tier: ContextTier.L2_PROJECT,
-          type: ContextObjectType.CODE_SNIPPET,
+          tier: ContextTier.L3_REPOSITORY,
+          type: ContextObjectType.CODE_SYMBOL,
           content: `# Repository Symbol Map (Syntactic Context):\n${renderedMap}`,
           source: 'source_code_indexer',
           timestamp: now,

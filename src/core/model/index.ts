@@ -50,3 +50,5 @@ export * from './benchmark-types.js';
 export * from './adapter-types.js';
 export * from './context-benchmark-types.js';
 export * from './symbol-types.js';
+export * from './trace-types.js';
+export * from './caching-types.js';

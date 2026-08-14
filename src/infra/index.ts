@@ -177,3 +177,11 @@ export type { ContextBenchmarkStrategy, StrategyStepResult, RetentionEvaluationR
 
 // Pi Replacement Compatibility Layer Adapter
 export { ViHarness } from './adapter/vi-harness-adapter.js';
+
+// Meta-Harness & Verification Additions
+export { MetaHarnessTraceLogger } from './logging/meta-harness-trace-logger.js';
+export type { MetaHarnessTraceLoggerOptions } from './logging/meta-harness-trace-logger.js';
+export { PrefixCachingCompiler } from './compiler/prefix-caching-compiler.js';
+export type { PrefixCachingCompilerInput } from './compiler/prefix-caching-compiler.js';
+export { ImpactedTestSelector } from './verification/impacted-test-selector.js';
+export type { TestSelectionRule } from './verification/impacted-test-selector.js';
