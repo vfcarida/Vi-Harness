@@ -101,6 +101,8 @@ export interface ContextCompilationRequest {
   readonly budget: ContextBudget;
   readonly dryRun?: boolean;
   readonly weights?: Partial<CompilerScoringWeights>;
+  readonly repoSymbolMap?: import('./symbol-types.js').RepoSymbolMap;
+  readonly useSymbolMap?: boolean;
 }
 
 export interface ContextCompilationResult {

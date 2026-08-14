@@ -25,17 +25,21 @@ export interface DefaultToolExecutorOptions {
   readonly registry?: ToolRegistry;
   readonly policyEngine?: PolicyEngine;
   readonly idFactory: IdFactory;
+  readonly enableCache?: boolean;
 }
 
 export class DefaultToolExecutor implements ToolExecutor {
   private readonly registry: ToolRegistry;
   private readonly policyEngine?: PolicyEngine;
   private readonly idFactory: IdFactory;
+  private readonly enableCache: boolean;
+  private readonly resultCache = new Map<string, ToolResult>();
 
   constructor(options: DefaultToolExecutorOptions) {
     this.registry = options.registry ?? new DefaultToolRegistry();
     this.policyEngine = options.policyEngine;
     this.idFactory = options.idFactory;
+    this.enableCache = options.enableCache ?? true;
   }
 
   register(tool: Tool): void {
@@ -178,6 +182,23 @@ export class DefaultToolExecutor implements ToolExecutor {
       }
     }
 
+    // Check Cache for Idempotent Read-Only Tools
+    const isCacheable = this.enableCache && tool.definition.idempotent && !tool.definition.mutating;
+    const cacheKey = `${tool.definition.name}:${JSON.stringify(sanitizedInput)}`;
+
+    if (isCacheable && this.resultCache.has(cacheKey)) {
+      const cached = this.resultCache.get(cacheKey)!;
+      return {
+        ...cached,
+        toolCallId: this.idFactory.create<'ToolCall'>(),
+        durationMs: Date.now() - startTime,
+        metadata: {
+          ...cached.metadata,
+          fromCache: true,
+        },
+      };
+    }
+
     // 5. Timeout Enforcement & Execution
     try {
       const executionPromise = tool.execute(sanitizedInput, fullContext);
@@ -209,7 +230,7 @@ export class DefaultToolExecutor implements ToolExecutor {
       const scrubbedOutput = SecretScrubber.scrub(res.output);
       const scrubbedError = res.error ? SecretScrubber.scrub(res.error) : undefined;
 
-      return {
+      const finalResult: ToolResult = {
         ...res,
         output: scrubbedOutput,
         error: scrubbedError,
@@ -219,6 +240,15 @@ export class DefaultToolExecutor implements ToolExecutor {
           ...(res.metadata ?? {}),
         },
       };
+
+      if (tool.definition.mutating) {
+        // Invalidate read cache when mutating tool runs
+        this.resultCache.clear();
+      } else if (isCacheable && finalResult.success) {
+        this.resultCache.set(cacheKey, finalResult);
+      }
+
+      return finalResult;
     } catch (err) {
       const durationMs = Date.now() - startTime;
       if (err instanceof HarnessError) throw err;

@@ -53,8 +53,12 @@ describe('Error Handling & Resilient Recovery Integration Suite', { timeout: 300
       },
       // Turn 2: Inspect context for error feedback and call valid tool
       (request: any) => {
-        const toolMsg = request.messages.find((m: any) => m.role === MessageRole.TOOL);
-        if (toolMsg && (toolMsg.content.includes('UNKNOWN_TOOL') || toolMsg.content.includes('unregistered_search_tool') || toolMsg.content.includes('not found') || toolMsg.content.includes('not registered'))) {
+        const toolMsg = request.messages.find(
+          (m: any) =>
+            (m.role === MessageRole.TOOL || m.role === MessageRole.TOOL_RESULT || m.role === 'TOOL' || m.role === 'TOOL_RESULT') &&
+            (m.content.includes('UNKNOWN_TOOL') || m.content.includes('unregistered_search_tool') || m.content.includes('not found') || m.content.includes('not registered')),
+        );
+        if (toolMsg) {
           receivedStructuredError = true;
         }
 
@@ -214,8 +218,12 @@ describe('Error Handling & Resilient Recovery Integration Suite', { timeout: 300
       },
       // Turn 2: Inspect message to ensure policy rejection was received, then propose safe read
       (request: any) => {
-        const toolMsg = request.messages.find((m: any) => m.role === MessageRole.TOOL);
-        if (toolMsg && (toolMsg.content.includes('DENY') || toolMsg.content.includes('Forbidden') || toolMsg.content.includes('policy') || toolMsg.content.includes('sanitizer'))) {
+        const toolMsg = request.messages.find(
+          (m: any) =>
+            (m.role === MessageRole.TOOL || m.role === MessageRole.TOOL_RESULT || m.role === 'TOOL' || m.role === 'TOOL_RESULT') &&
+            (m.content.includes('DENY') || m.content.includes('Forbidden') || m.content.includes('policy') || m.content.includes('sanitizer')),
+        );
+        if (toolMsg) {
           policyDenialReceived = true;
         }
 

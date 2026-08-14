@@ -19,7 +19,7 @@ const FORBIDDEN_DESTRUCTIVE_PATTERNS: ReadonlyArray<{ pattern: RegExp; descripti
   { pattern: /\bchmod\s+(?:777|a\+rwx|-R\s+777)\b/i, description: 'Dangerous permissive permission change' },
   { pattern: /\|\s*(?:sh|bash|zsh|dash)\b/i, description: 'Pipe to shell interpreter' },
   { pattern: />\s*\/dev\/(?:sd[a-z]|hd[a-z]|nvme)/i, description: 'Raw block device redirection' },
-  { pattern: /\b(?:eval|powershell\s+-(?:enc|encodedcommand)|cmd\.exe\s+\/c)\b/i, description: 'Obfuscated or eval shell execution' },
+  { pattern: /\b(?:eval|child_process|powershell\s+-(?:enc|encodedcommand)|cmd\.exe\s+\/c)\b/i, description: 'Child process execution or obfuscated eval shell execution' },
 ];
 
 const ENV_EXFILTRATION_PATTERNS: ReadonlyArray<{ pattern: RegExp; description: string }> = [
@@ -77,19 +77,7 @@ export class CommandSanitizer {
     // Normalize whitespace and control characters
     const normalizedCommand = command.trim().replace(/\s+/g, ' ');
 
-    // 1. Destructive & Forbidden Command Vectors
-    for (const { pattern, description } of FORBIDDEN_DESTRUCTIVE_PATTERNS) {
-      if (pattern.test(normalizedCommand)) {
-        return {
-          allowed: false,
-          normalizedCommand,
-          reason: `Forbidden shell command vector: ${description}`,
-          errorCode: 'FORBIDDEN_COMMAND',
-        };
-      }
-    }
-
-    // 2. Command Chaining & Substitution (Shell Injection)
+    // 1. Command Chaining & Substitution (Shell Injection)
     if (!options.allowChaining) {
       for (const { pattern, description } of COMMAND_CHAINING_PATTERNS) {
         if (pattern.test(normalizedCommand)) {
@@ -100,6 +88,18 @@ export class CommandSanitizer {
             errorCode: 'SHELL_INJECTION',
           };
         }
+      }
+    }
+
+    // 2. Destructive & Forbidden Command Vectors
+    for (const { pattern, description } of FORBIDDEN_DESTRUCTIVE_PATTERNS) {
+      if (pattern.test(normalizedCommand)) {
+        return {
+          allowed: false,
+          normalizedCommand,
+          reason: `Forbidden shell command vector: ${description}`,
+          errorCode: 'FORBIDDEN_COMMAND',
+        };
       }
     }
 

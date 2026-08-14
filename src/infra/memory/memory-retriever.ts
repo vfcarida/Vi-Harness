@@ -79,6 +79,12 @@ export class MemoryRetriever {
 
       // 8. Calculate Composite Score
       const scored = MemoryScorer.score(record, query, nowMs);
+
+      // If minRelevance threshold is specified, enforce it
+      if ((query as any).minRelevance !== undefined && scored.relevanceScore < (query as any).minRelevance) {
+        continue;
+      }
+
       scoredList.push(scored);
     }
 

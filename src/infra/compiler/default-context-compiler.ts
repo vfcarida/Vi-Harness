@@ -37,27 +37,33 @@ import { ContextCompressor } from './context-compressor.js';
 import { ContextValidator } from './context-validator.js';
 import { ContextSanitizer } from '../security/context-sanitizer.js';
 import { SecretScrubber } from '../security/secret-scrubber.js';
+import type { MemoryStore } from '../../core/interfaces/memory-store.js';
+import { MemoryStatus } from '../../core/model/memory-types.js';
+import { SourceCodeIndexer } from '../syntax/source-code-indexer.js';
 
 export interface DefaultContextCompilerOptions {
   readonly idFactory: IdFactory;
   readonly clock: Clock;
+  readonly memoryStore?: MemoryStore;
 }
 
 export class DefaultContextCompiler implements ContextCompiler {
   private readonly idFactory: IdFactory;
   private readonly clock: Clock;
+  private readonly memoryStore?: MemoryStore;
 
   constructor(options: DefaultContextCompilerOptions) {
     this.idFactory = options.idFactory;
     this.clock = options.clock;
+    this.memoryStore = options.memoryStore;
   }
 
   async compile(request: ContextCompilationRequest): Promise<ContextCompilationResult> {
     const startTime = Date.now();
     const now = this.clock.now();
 
-    // 1. Candidate Assembly (Read-Only)
-    const candidates = this.assembleCandidateObjects(request, now);
+    // 1. Candidate Assembly (Read-Only with RAG Memory Retrieval)
+    const candidates = await this.assembleCandidateObjects(request, now);
 
     // Calculate tokens before compilation
     const tokensBefore = candidates.reduce((acc, obj) => acc + obj.costTokens, 0);
@@ -79,11 +85,12 @@ export class DefaultContextCompiler implements ContextCompiler {
     const modelMaxContext = request.targetModelDescriptor.capabilities.maxContextTokens;
     const effectiveMaxTokens = Math.min(request.budget.maxTokens, modelMaxContext);
 
-    // 5. Stage 4: Progressive Compression
+    // 5. Stage 4: Progressive Compression (Multi-Tier Pipeline)
     const compressionResult = ContextCompressor.compress(
       scoredObjects,
       effectiveMaxTokens,
       now.getTime(),
+      { modelContextTokens: modelMaxContext },
     );
 
     const retainedObjects = compressionResult.retained;
@@ -142,21 +149,18 @@ export class DefaultContextCompiler implements ContextCompiler {
       durationMs,
     };
 
-    // 9. Generate Dry-Run Explanation if requested
-    let explanation: CompilationExplanation | undefined;
-    if (request.dryRun) {
-      let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
-      if (compressionRatio > 0.7) riskLevel = 'MEDIUM';
-      if (compressionRatio > 0.9) riskLevel = 'HIGH';
+    // 9. Generate Detailed Explanation Report
+    let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
+    if (compressionRatio > 0.7) riskLevel = 'MEDIUM';
+    if (compressionRatio > 0.9) riskLevel = 'HIGH';
 
-      explanation = {
-        items: compressionResult.explanations,
-        riskLevel,
-        summary:
-          `Compiled ${retainedObjects.length} objects (${tokensAfter} tokens) from ${candidates.length} candidates (${tokensBefore} tokens). ` +
-          `Compression ratio: ${(compressionRatio * 100).toFixed(1)}%. Risk: ${riskLevel}.`,
-      };
-    }
+    const explanation: CompilationExplanation = {
+      items: compressionResult.explanations,
+      riskLevel,
+      summary:
+        `Compiled ${retainedObjects.length} objects (${tokensAfter} tokens) from ${candidates.length} candidates (${tokensBefore} tokens). ` +
+        `Compression ratio: ${(compressionRatio * 100).toFixed(1)}%. Risk: ${riskLevel}.`,
+    };
 
     return {
       compiledContext,
@@ -166,15 +170,109 @@ export class DefaultContextCompiler implements ContextCompiler {
     };
   }
 
-  private assembleCandidateObjects(
+  private async assembleCandidateObjects(
     request: ContextCompilationRequest,
     now: Date,
-  ): ContextObject[] {
+  ): Promise<ContextObject[]> {
     const candidates: ContextObject[] = [];
+
+    // Long-Term Memory Retrieval (RAG: only active, relevant durable facts)
+    if (this.memoryStore) {
+      try {
+        const queryText = `${request.task.description} ${request.goal.description}`;
+        const scoredMemories = await this.memoryStore.retrieve({
+          queryText,
+          activeOnly: true,
+          limit: 5,
+        });
+
+        for (const scored of scoredMemories) {
+          const mem = scored.record;
+          if (
+            (mem.status === MemoryStatus.ACTIVE || mem.status === MemoryStatus.PROMOTED) &&
+            (scored.scoreBreakdown.textSimilarity > 0 || scored.relevanceScore >= 0.75)
+          ) {
+            candidates.push({
+              id: this.idFactory.create<'Context'>(),
+              tier: ContextTier.L3_REPOSITORY,
+              type: ContextObjectType.REQUIREMENT,
+              content: `[Long-Term Memory: ${mem.type}] ${mem.content}`,
+              source: `memory_store:${mem.source}`,
+              timestamp: mem.createdAt,
+              importance: Math.max(0.7, mem.importance),
+              confidence: mem.confidence,
+              scope: ContextScope.GLOBAL,
+              dependencies: [],
+              lastUsed: now,
+              lastVerified: mem.lastVerified,
+              costTokens: Math.ceil(mem.content.length / 4),
+              tags: ['memory_rag', 'durable_fact', ...mem.tags],
+              version: 1,
+              active: true,
+              metadata: { memoryId: mem.id, memoryType: mem.type, topic: mem.topic },
+            });
+          }
+        }
+      } catch {
+        // Ignore memory retrieval error
+      }
+    }
 
     // Explicit objects passed in request
     if (request.relevantObjects) {
-      candidates.push(...request.relevantObjects);
+      for (const obj of request.relevantObjects) {
+        // If Symbol Map is active and object is a large raw file that is not the primary focus file,
+        // compress it to its syntactic outline to save tokens
+        if (
+          request.useSymbolMap &&
+          request.repoSymbolMap &&
+          obj.type === ContextObjectType.FILE
+        ) {
+          const filePath = String(obj.metadata['filePath'] ?? obj.id);
+          const fileMap = request.repoSymbolMap.files.get(filePath);
+          if (fileMap && (!request.currentFiles || !request.currentFiles.includes(filePath))) {
+            const outlineContent = fileMap.outline;
+            candidates.push({
+              ...obj,
+              content: outlineContent,
+              costTokens: Math.ceil(outlineContent.length / 4),
+              tags: [...obj.tags, 'symbol_outline'],
+            });
+            continue;
+          }
+        }
+        candidates.push(obj);
+      }
+    }
+
+    // Repository Symbol Map (Aider-style AST structural map)
+    if (request.repoSymbolMap) {
+      const renderedMap = SourceCodeIndexer.renderRepoMap(request.repoSymbolMap, {
+        maxTokens: Math.min(2000, Math.floor(request.budget.maxTokens * 0.3)),
+        focusFiles: request.currentFiles,
+      });
+
+      if (renderedMap.length > 0) {
+        candidates.push({
+          id: this.idFactory.create<'Context'>(),
+          tier: ContextTier.L2_PROJECT,
+          type: ContextObjectType.CODE_SNIPPET,
+          content: `# Repository Symbol Map (Syntactic Context):\n${renderedMap}`,
+          source: 'source_code_indexer',
+          timestamp: now,
+          importance: 0.85,
+          confidence: 1.0,
+          scope: ContextScope.GLOBAL,
+          dependencies: [],
+          lastUsed: now,
+          lastVerified: now,
+          costTokens: Math.ceil(renderedMap.length / 4),
+          tags: ['repo_map', 'syntactic_context'],
+          version: 1,
+          active: true,
+          metadata: { totalFiles: request.repoSymbolMap.totalFiles, totalSymbols: request.repoSymbolMap.totalSymbols },
+        });
+      }
     }
 
     // Goal & User Instructions (L3 Repository / Invariant)

@@ -53,6 +53,11 @@ export type { UtilityModelRouterOptions } from './router/utility-model-router.js
 export { ContextGraph } from './context/context-graph.js';
 export { InMemoryContextStore } from './context/in-memory-context-store.js';
 export type { InMemoryContextStoreOptions } from './context/in-memory-context-store.js';
+export { DynamicContextManager } from './context/dynamic-context-manager.js';
+export type { DynamicContextState } from './context/dynamic-context-manager.js';
+
+// Syntax & Source Code Indexer (Aider-Style Repo-Map)
+export { SourceCodeIndexer } from './syntax/source-code-indexer.js';
 
 // Context Compiler
 export { ContextDeduplicator } from './compiler/context-deduplicator.js';

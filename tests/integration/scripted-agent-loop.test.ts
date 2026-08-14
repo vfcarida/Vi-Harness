@@ -241,8 +241,12 @@ describe('Genuine Coding-Agent Iteration Loop Integration', { timeout: 30000 }, 
       },
       (request: any) => {
         // Inspect if structured error was delivered back in request messages
-        const toolMsg = request.messages.find((m: any) => m.role === MessageRole.TOOL);
-        if (toolMsg && toolMsg.content.includes('UNKNOWN_TOOL')) {
+        const toolMsg = request.messages.find(
+          (m: any) =>
+            (m.role === MessageRole.TOOL || m.role === MessageRole.TOOL_RESULT || m.role === 'TOOL' || m.role === 'TOOL_RESULT') &&
+            m.content.includes('UNKNOWN_TOOL'),
+        );
+        if (toolMsg) {
           errorReceivedInContext = true;
         }
 
@@ -334,7 +338,13 @@ describe('Genuine Coding-Agent Iteration Loop Integration', { timeout: 30000 }, 
       },
       // Iteration 2: Inspects both tool messages
       (request: any) => {
-        const toolMessages = request.messages.filter((m: any) => m.role === MessageRole.TOOL);
+        const toolMessages = request.messages.filter(
+          (m: any) =>
+            m.role === MessageRole.TOOL ||
+            m.role === MessageRole.TOOL_RESULT ||
+            m.role === 'TOOL' ||
+            m.role === 'TOOL_RESULT',
+        );
         const hasA = toolMessages.some((m: any) => m.content.includes('Content of A') || m.content.includes('fileA.txt'));
         const hasB = toolMessages.some((m: any) => m.content.includes('Content of B') || m.content.includes('fileB.txt'));
         if (hasA && hasB) {
