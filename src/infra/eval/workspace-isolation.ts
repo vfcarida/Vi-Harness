@@ -118,7 +118,7 @@ export class WorkspaceIsolationManager {
         if (fs.existsSync(workspacePath)) {
           fs.rmSync(workspacePath, { recursive: true, force: true });
         }
-      } catch (err) {
+      } catch {
         // Silently ignore cleanup errors in temporary directories
       }
     };

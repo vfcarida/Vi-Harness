@@ -468,7 +468,9 @@ export class IterationExecutor {
         if (!goal.constraints.requireVerification && isStoppingWithoutTools) {
           while ((stateMachine.phase as AgentPhase) !== AgentPhase.DONE && !stateMachine.isTerminal) {
             const currentPhase = stateMachine.phase as AgentPhase;
-            if (currentPhase === AgentPhase.PLAN) {
+            if (currentPhase === AgentPhase.EXPLORE) {
+              stateMachine.apply(StateEvent.EXPLORE_COMPLETE);
+            } else if (currentPhase === AgentPhase.PLAN) {
               stateMachine.apply(StateEvent.PLAN_READY);
             } else if (currentPhase === AgentPhase.IMPLEMENT) {
               stateMachine.apply(StateEvent.IMPLEMENTATION_COMPLETE);

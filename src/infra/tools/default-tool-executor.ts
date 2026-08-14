@@ -76,7 +76,7 @@ export class DefaultToolExecutor implements ToolExecutor {
 
     const correlationId =
       request.context?.correlationId ?? this.idFactory.create<'Trace'>();
-    const timeoutMs = request.context?.timeoutMs ?? tool.definition.defaultTimeoutMs;
+    const timeoutMs = request.context?.timeoutMs ?? tool.definition.defaultTimeoutMs ?? 30000;
 
     const fullContext: ToolExecutionContext = {
       correlationId,

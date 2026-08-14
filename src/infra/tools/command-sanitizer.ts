@@ -16,7 +16,7 @@ const FORBIDDEN_DESTRUCTIVE_PATTERNS: ReadonlyArray<{ pattern: RegExp; descripti
   { pattern: /\bdd\s+if=/i, description: 'Direct disk write with dd' },
   { pattern: /\bfdisk\b/i, description: 'Disk partitioning' },
   { pattern: /\bparted\b/i, description: 'Disk partitioning' },
-  { pattern: /\bchmod\s+(?:777|a\+rwx|\-R\s+777)\b/i, description: 'Dangerous permissive permission change' },
+  { pattern: /\bchmod\s+(?:777|a\+rwx|-R\s+777)\b/i, description: 'Dangerous permissive permission change' },
   { pattern: /\|\s*(?:sh|bash|zsh|dash)\b/i, description: 'Pipe to shell interpreter' },
   { pattern: />\s*\/dev\/(?:sd[a-z]|hd[a-z]|nvme)/i, description: 'Raw block device redirection' },
   { pattern: /\b(?:eval|powershell\s+-(?:enc|encodedcommand)|cmd\.exe\s+\/c)\b/i, description: 'Obfuscated or eval shell execution' },

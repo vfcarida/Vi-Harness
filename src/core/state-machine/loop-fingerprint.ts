@@ -231,6 +231,9 @@ export function detectTrajectoryCycle(
   const tail = trajectory.slice(-cycleLength);
   const preceding = trajectory.slice(-(cycleLength * 2), -cycleLength);
 
+  // A cycle requires at least 2 distinct phases to represent an oscillation
+  if (new Set(tail).size < 2) return null;
+
   for (let i = 0; i < cycleLength; i++) {
     if (tail[i] !== preceding[i]) return null;
   }

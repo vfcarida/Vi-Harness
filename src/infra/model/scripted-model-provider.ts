@@ -24,6 +24,7 @@ export interface ScriptedStep {
   readonly content?: string;
   readonly toolCalls?: ReadonlyArray<{ name: string; input: Record<string, unknown>; id?: string }>;
   readonly finishReason?: FinishReason;
+  readonly usage?: TokenUsage;
 }
 
 export type ScriptStepHandler = ScriptedStep | ((request: ModelRequest, index: number) => ScriptedStep);
@@ -89,13 +90,20 @@ export class ScriptedModelProvider implements ModelProvider {
     const content = step.content ?? (toolCalls.length > 0 ? '' : 'Scripted trajectory completed successfully.');
     const finishReason = step.finishReason ?? (toolCalls.length > 0 ? FinishReason.TOOL_CALL : FinishReason.STOP);
 
-    const inputTokens = request.messages.reduce((acc, m) => acc + Math.ceil(m.content.length / 4), 0);
-    const outputTokens = Math.ceil(content.length / 4) + 10;
-    const usage: TokenUsage = {
+    const inputTokens =
+      step.usage?.inputTokens ??
+      request.messages.reduce((acc, m) => acc + Math.ceil(m.content.length / 4), 0);
+    const outputTokens = step.usage?.outputTokens ?? Math.ceil(content.length / 4) + 10;
+    const usage: TokenUsage = step.usage ?? {
       inputTokens,
       outputTokens,
       totalTokens: inputTokens + outputTokens,
     };
+
+    const costPer1kInput = this.descriptor.costPer1kInputTokensDollars ?? 0.001;
+    const costPer1kOutput = this.descriptor.costPer1kOutputTokensDollars ?? 0.002;
+    const estimatedCostDollars =
+      (inputTokens / 1000) * costPer1kInput + (outputTokens / 1000) * costPer1kOutput;
 
     return {
       requestId: `scripted-req-${stepIndex + 1}`,
@@ -106,7 +114,7 @@ export class ScriptedModelProvider implements ModelProvider {
       usage,
       finishReason,
       latencyMs: 5,
-      estimatedCostDollars: 0.0001,
+      estimatedCostDollars,
     };
   }
 
