@@ -204,3 +204,26 @@ export type { IncrementalToolState } from './model/streaming-tool-parser.js';
 export { AuditIntegritySigner } from './security/audit-integrity-signer.js';
 export type { SignedAuditPayload } from './security/audit-integrity-signer.js';
 
+// Model Context Protocol (MCP) Subsystem
+export { McpServer } from './mcp/mcp-server.js';
+export type { McpServerOptions } from './mcp/mcp-server.js';
+export { McpClientAdapter } from './mcp/mcp-client-adapter.js';
+export type { McpClientAdapterOptions, McpTransport } from './mcp/mcp-client-adapter.js';
+export type {
+  McpJsonRpcRequest,
+  McpJsonRpcResponse,
+  McpToolDefinition,
+  McpResourceDefinition,
+  McpResourceContent,
+  McpCallToolResult,
+} from './mcp/mcp-types.js';
+
+// Terminal UI (TUI) Dashboard
+export { TerminalDashboardRenderer } from './tui/terminal-dashboard-renderer.js';
+export type { DashboardState } from './tui/terminal-dashboard-renderer.js';
+
+// Trajectory Distillation (SFT & DPO)
+export { TrajectoryDatasetExporter } from './telemetry/trajectory-dataset-exporter.js';
+export type { SftTrainingExample, DpoTrainingExample } from './telemetry/trajectory-dataset-exporter.js';
+
+
