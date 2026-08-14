@@ -119,17 +119,18 @@ export class StateMachine {
       options?.isLlmEmitted ?? false,
     );
 
-    // DONE evidence gate: transitioning to DONE via VERIFICATION_PASSED
-    // requires at least one evidence ID. The agent must prove success.
+    // DONE evidence gate: transitioning to DONE via automated verification
+    // requires at least one evidence ID. The agent must prove task completion with empirical evidence.
+    // (Human override path from HUMAN_REQUIRED allows direct MARK_DONE without evidence).
     if (
       targetPhase === AgentPhase.DONE &&
-      event === StateEvent.VERIFICATION_PASSED &&
+      (event === StateEvent.VERIFICATION_PASSED || (event === StateEvent.MARK_DONE && this._state.phase !== AgentPhase.HUMAN_REQUIRED)) &&
       (!options?.evidenceIds || options.evidenceIds.length === 0)
     ) {
       throw new HarnessError({
         code: ErrorCode.STATE_INVALID_TRANSITION,
         category: ErrorCategory.STATE,
-        message: 'Transition to DONE via VERIFICATION_PASSED requires at least one evidenceId. The agent must prove task completion.',
+        message: 'Transition to DONE requires at least one verified evidenceId. The agent must prove task completion with empirical evidence.',
         context: { from: this._state.phase, event, evidenceIds: options?.evidenceIds ?? [] },
       });
     }

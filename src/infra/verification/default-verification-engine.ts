@@ -84,6 +84,41 @@ export class DefaultVerificationEngine implements VerificationEngine {
 
     // Map profile / target to checks to execute
     const checks = this.resolveChecksForProfile(target, profile);
+    if (checks.length === 0) {
+      const summary = `Verification INCONCLUSIVE: No verification checks could be resolved for target [${target.type}] under ${profile} profile`;
+      const evId = this.idFactory.create<'Evidence'>();
+      const evidence: Evidence = {
+        id: evId,
+        taskId,
+        type: EvidenceType.VERIFICATION,
+        outcome: EvidenceOutcome.INCONCLUSIVE,
+        summary,
+        data: { targetType: target.type, profile },
+        createdAt: now,
+        pass: false,
+        checkId: `check-${target.type}`,
+        confidence: 0.0,
+        affectedFiles: target.path ? [target.path] : [],
+      };
+      if (this.evidenceStore) {
+        await this.evidenceStore.record(evidence);
+      }
+      return {
+        status: VerificationStatus.INCONCLUSIVE,
+        summary,
+        evidenceIds: [evId],
+        taskId,
+        verifiedAt: now,
+        suiteId: `suite-${profile.toLowerCase()}`,
+        durationMs: Date.now() - startTime,
+        confidence: 0.0,
+        scope: 'repository',
+        affectedFiles: target.path ? [target.path] : [],
+        checkExecutions: [],
+        details: { profile, target },
+      };
+    }
+
     const executions: VerificationCheckExecution[] = [];
     const evidenceIds: EvidenceId[] = [];
     let overallStatus = VerificationStatus.PASSED;

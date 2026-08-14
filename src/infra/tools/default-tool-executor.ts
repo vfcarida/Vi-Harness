@@ -123,19 +123,8 @@ export class DefaultToolExecutor implements ToolExecutor {
       };
     }
 
-    // 4. Policy Engine Evaluation (Unbypassable for Security-Critical Operations)
-    const isSecurityCritical =
-      tool.definition.mutating ||
-      tool.definition.irreversible === true ||
-      tool.definition.category === 'EXECUTE' ||
-      tool.definition.category === 'DESTRUCTIVE' ||
-      tool.definition.requiresNetwork === true ||
-      tool.definition.riskLevel === 'HIGH' ||
-      tool.definition.riskLevel === 'CRITICAL' ||
-      tool.definition.filesystemScope === 'system' ||
-      request.requiresPolicy !== false;
-
-    if (this.policyEngine && isSecurityCritical) {
+    // 4. Policy Engine Evaluation (Unbypassable Mandatory Policy for All Tools)
+    if (this.policyEngine) {
       const actionResource = String(
         sanitizedInput['path'] ??
         sanitizedInput['cmd'] ??

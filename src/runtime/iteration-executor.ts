@@ -18,7 +18,7 @@
  * 9. State Transition (derived strictly from actual evidence & tool results)
  * 10. Termination Decision (evaluating stop conditions & trajectory metrics)
  */
-import type { IdFactory, ExecutionId, TaskId, HypothesisId } from '../core/types/identifiers.js';
+import type { IdFactory, ExecutionId, TaskId, HypothesisId, EvidenceId } from '../core/types/identifiers.js';
 import type { Clock } from '../core/interfaces/clock.js';
 import type { ModelRouter } from '../core/interfaces/model-router.js';
 import type { ContextCompiler } from '../core/interfaces/context-compiler.js';
@@ -53,6 +53,7 @@ import type { Iteration } from '../core/model/iteration.js';
 import { IterationOutcome } from '../core/model/iteration.js';
 import { ContextTier } from '../core/model/context.js';
 import type { ContextObject } from '../core/model/context-object.js';
+import { VerificationStatus, type VerificationResult } from '../core/model/verification.js';
 
 export interface IterationExecutorParams {
   readonly executionId: ExecutionId;
@@ -318,6 +319,50 @@ export class IterationExecutor {
     // -----------------------------------------------------------------------
     const evidenceCreated: Evidence[] = [];
     const now = clock.now();
+    const hasFailingTool = toolResults.some(
+      (t) => t.status === ActionResultStatus.FAILURE || t.status === ActionResultStatus.DENIED,
+    );
+
+    // Record explicit failure evidence for any tool call that failed (e.g. UNKNOWN_TOOL, POLICY_DENIED, etc.)
+    for (const res of toolResults) {
+      if (res.status === ActionResultStatus.FAILURE || res.status === ActionResultStatus.DENIED || res.metadata?.['errorCode'] === 'UNKNOWN_TOOL') {
+        const isUnknownTool = res.metadata?.['errorCode'] === 'UNKNOWN_TOOL';
+        const isPolicyDenied = res.metadata?.['errorCode'] === 'POLICY_DENIED' || res.status === ActionResultStatus.DENIED;
+        const evSummary = isUnknownTool
+          ? `UNKNOWN_TOOL: Tool [${res.metadata?.['toolName'] ?? 'unknown'}] is not registered in ToolRegistry`
+          : isPolicyDenied
+          ? `POLICY_DENIED: Action on [${res.metadata?.['toolName'] ?? 'tool'}] blocked by security policy`
+          : `TOOL_FAILURE: Execution failed for tool [${res.metadata?.['toolName'] ?? 'tool'}]: ${res.error ?? 'error'}`;
+
+        const ev: Evidence = {
+          id: idFactory.create<'Evidence'>(),
+          taskId: task.id,
+          type: EvidenceType.RUNTIME_OUTPUT,
+          outcome: EvidenceOutcome.FAIL,
+          summary: evSummary,
+          data: {
+            errorCode: res.metadata?.['errorCode'] ?? 'TOOL_EXECUTION_FAILED',
+            actionId: res.actionId,
+            error: res.error,
+          },
+          createdAt: now,
+          pass: false,
+          confidence: 0.0,
+          affectedFiles: [],
+        };
+        evidenceCreated.push(ev);
+        if (params.evidenceStore) {
+          await params.evidenceStore.record(ev);
+        }
+        observerHub.emit({
+          type: AgentEventType.EvidenceCreated,
+          executionId,
+          taskId: task.id,
+          timestamp: now,
+          data: { evidence: ev },
+        });
+      }
+    }
 
     const hasTestRunAction = actionProposals.some((p) => {
       if (p.type === ActionType.TEST_RUN) return true;
@@ -332,21 +377,45 @@ export class IterationExecutor {
         hasTestRunAction ||
         (currentState.phase === AgentPhase.REPAIR && (isStoppingWithoutTools || hasTestRunAction))
       ) {
-        const vResult = await params.verificationEngine.verify({
-          type: 'test-suite',
-          content: task.description,
-        });
+        let vResult: VerificationResult;
+        try {
+          vResult = await params.verificationEngine.verify({
+            type: 'test-suite',
+            content: task.description,
+          });
+        } catch (err: any) {
+          vResult = {
+            status: VerificationStatus.INCONCLUSIVE,
+            summary: `Verification execution failed: ${err?.message ?? String(err)}`,
+            evidenceIds: [],
+            taskId: task.id,
+            verifiedAt: now,
+            suiteId: 'error-suite',
+            durationMs: 0,
+            confidence: 0.0,
+            scope: 'repository',
+            affectedFiles: [],
+            checkExecutions: [],
+          };
+        }
+
+        const isPassed = vResult.status === VerificationStatus.PASSED;
+        const isInconclusive = vResult.status === VerificationStatus.INCONCLUSIVE;
 
         const ev: Evidence = {
           id: idFactory.create<'Evidence'>(),
           taskId: task.id,
           type: EvidenceType.TEST_RESULT,
-          outcome: vResult.status === 'PASSED' ? EvidenceOutcome.PASS : EvidenceOutcome.FAIL,
-          summary: vResult.summary ?? (vResult.status === 'PASSED' ? 'Verification Suite Passed' : 'Verification Suite Failed'),
+          outcome: isPassed
+            ? EvidenceOutcome.PASS
+            : isInconclusive
+            ? EvidenceOutcome.INCONCLUSIVE
+            : EvidenceOutcome.FAIL,
+          summary: vResult.summary ?? (isPassed ? 'Verification Suite Passed' : 'Verification Suite Failed'),
           data: { status: vResult.status },
           createdAt: now,
-          pass: vResult.status === 'PASSED',
-          confidence: vResult.confidence ?? 0.95,
+          pass: isPassed,
+          confidence: vResult.confidence ?? (isPassed ? 0.95 : 0.0),
           affectedFiles: vResult.affectedFiles ?? [],
         };
 
@@ -363,8 +432,8 @@ export class IterationExecutor {
           data: { evidence: ev },
         });
       }
-    } else {
-      // Missing verification MUST NOT become PASS. Synthetic success prohibited.
+    } else if (goal.constraints.requireVerification) {
+      // Missing verification MUST NOT become PASS when verification IS required. Synthetic success prohibited.
       const ev: Evidence = {
         id: idFactory.create<'Evidence'>(),
         taskId: task.id,
@@ -389,16 +458,39 @@ export class IterationExecutor {
         timestamp: now,
         data: { evidence: ev },
       });
+    } else if (isStoppingWithoutTools && !hasFailingTool) {
+      const ev: Evidence = {
+        id: idFactory.create<'Evidence'>(),
+        taskId: task.id,
+        type: EvidenceType.RUNTIME_OUTPUT,
+        outcome: EvidenceOutcome.PASS,
+        summary: 'TASK_COMPLETION: Task execution completed without verification requirement',
+        data: { status: 'COMPLETED' },
+        createdAt: now,
+        pass: true,
+        confidence: 0.95,
+        affectedFiles: [],
+      };
+      evidenceCreated.push(ev);
+      if (params.evidenceStore) {
+        await params.evidenceStore.record(ev);
+      }
+
+      observerHub.emit({
+        type: AgentEventType.EvidenceCreated,
+        executionId,
+        taskId: task.id,
+        timestamp: now,
+        data: { evidence: ev },
+      });
     }
 
     // -----------------------------------------------------------------------
     // PHASE 9: DERIVED STATE TRANSITION (STRICT RESULTS-BASED)
     // -----------------------------------------------------------------------
-    const hasFailingEvidence = evidenceCreated.some((e) => !e.pass);
-    const hasPassedEvidence = evidenceCreated.some((e) => e.pass);
-    const hasFailingTool = toolResults.some(
-      (t) => t.status === ActionResultStatus.FAILURE || t.status === ActionResultStatus.DENIED,
-    );
+    const hasFailingEvidence = evidenceCreated.some((e) => !e.pass && e.outcome === EvidenceOutcome.FAIL);
+    const hasInconclusiveEvidence = evidenceCreated.some((e) => e.outcome === EvidenceOutcome.INCONCLUSIVE);
+    const hasPassedEvidence = evidenceCreated.some((e) => e.pass && e.outcome === EvidenceOutcome.PASS);
 
     const hasFileWriteAction = actionProposals.some((p) => {
       if (p.type === ActionType.FILE_WRITE || p.type === ActionType.FILE_DELETE) return true;
@@ -411,7 +503,10 @@ export class IterationExecutor {
     if (stateBefore === AgentPhase.INIT) {
       nextEvent = StateEvent.START;
     } else if (stateBefore === AgentPhase.EXPLORE) {
-      if (hasFileWriteAction) {
+      if (hasFailingTool) {
+        // Tool failed (e.g. unknown tool) -> remain in EXPLORE to allow recovery without advancing phase
+        nextEvent = null;
+      } else if (hasFileWriteAction) {
         nextEvent = StateEvent.PLAN_READY; // directly start implementing
       } else if (hasTestRunAction || isStoppingWithoutTools) {
         nextEvent = StateEvent.EXPLORE_COMPLETE;
@@ -420,30 +515,34 @@ export class IterationExecutor {
         nextEvent = null;
       }
     } else if (stateBefore === AgentPhase.PLAN) {
-      if (hasFileWriteAction || isStoppingWithoutTools) {
+      if (hasFailingTool) {
+        nextEvent = null;
+      } else if (hasFileWriteAction || isStoppingWithoutTools) {
         nextEvent = StateEvent.PLAN_READY;
       } else {
         nextEvent = null;
       }
     } else if (stateBefore === AgentPhase.IMPLEMENT) {
-      if (hasTestRunAction || isStoppingWithoutTools) {
+      if (hasFailingTool) {
+        nextEvent = null;
+      } else if (hasTestRunAction || isStoppingWithoutTools) {
         nextEvent = StateEvent.IMPLEMENTATION_COMPLETE;
       } else {
         // Still implementing / editing files
         nextEvent = null;
       }
     } else if (stateBefore === AgentPhase.VERIFY) {
-      if (hasPassedEvidence && !hasFailingEvidence) {
+      if (hasPassedEvidence && !hasFailingEvidence && !hasInconclusiveEvidence) {
         nextEvent = StateEvent.VERIFICATION_PASSED;
-      } else if (hasFailingEvidence) {
+      } else if (hasFailingEvidence || hasInconclusiveEvidence) {
         nextEvent = StateEvent.VERIFICATION_FAILED;
       } else {
         nextEvent = null;
       }
     } else if (stateBefore === AgentPhase.REPAIR) {
-      if (hasPassedEvidence && !hasFailingEvidence) {
+      if (hasPassedEvidence && !hasFailingEvidence && !hasInconclusiveEvidence) {
         nextEvent = StateEvent.REPAIR_COMPLETE;
-      } else if (hasFailingEvidence) {
+      } else if (hasFailingEvidence || hasInconclusiveEvidence) {
         const maxRepairs = goal.constraints.maxRepairAttempts ?? 3;
         if (stateMachine.state.repairCount >= maxRepairs) {
           nextEvent = StateEvent.MAX_REPAIRS_EXCEEDED;
@@ -460,12 +559,13 @@ export class IterationExecutor {
 
     if (nextEvent && stateMachine.phase !== AgentPhase.DONE && !stateMachine.isTerminal) {
       try {
+        const validEvidenceIds = evidenceCreated.filter((e) => e.pass).map((e) => e.id);
         stateMachine.apply(nextEvent, {
-          evidenceIds: evidenceCreated.map((e) => e.id),
+          evidenceIds: validEvidenceIds.length > 0 ? validEvidenceIds : undefined,
         });
 
         // Cascade transition to DONE if verification passed or non-verification task is completed
-        if (!goal.constraints.requireVerification && isStoppingWithoutTools) {
+        if (!goal.constraints.requireVerification && isStoppingWithoutTools && !hasFailingTool && !hasFailingEvidence && !hasInconclusiveEvidence) {
           while ((stateMachine.phase as AgentPhase) !== AgentPhase.DONE && !stateMachine.isTerminal) {
             const currentPhase = stateMachine.phase as AgentPhase;
             if (currentPhase === AgentPhase.EXPLORE) {
@@ -475,24 +575,32 @@ export class IterationExecutor {
             } else if (currentPhase === AgentPhase.IMPLEMENT) {
               stateMachine.apply(StateEvent.IMPLEMENTATION_COMPLETE);
             } else if (currentPhase === AgentPhase.VERIFY) {
-              stateMachine.apply(StateEvent.MARK_DONE);
+              const doneEvidenceId = validEvidenceIds[0] ?? (evidenceCreated[0]?.id as EvidenceId);
+              if (doneEvidenceId) {
+                stateMachine.apply(StateEvent.MARK_DONE, { evidenceIds: [doneEvidenceId] });
+              } else {
+                break;
+              }
             } else {
               break;
             }
           }
         } else if ((stateMachine.phase as AgentPhase) === AgentPhase.VERIFY && evidenceCreated.length > 0) {
-          if (hasPassedEvidence && !hasFailingEvidence) {
-            stateMachine.apply(StateEvent.VERIFICATION_PASSED, {
-              evidenceIds: evidenceCreated.map((e) => e.id),
-            });
-          } else if (hasFailingEvidence) {
+          if (hasPassedEvidence && !hasFailingEvidence && !hasInconclusiveEvidence) {
+            const passedEvIds = evidenceCreated.filter((e) => e.pass).map((e) => e.id);
+            if (passedEvIds.length > 0) {
+              stateMachine.apply(StateEvent.VERIFICATION_PASSED, {
+                evidenceIds: passedEvIds,
+              });
+            }
+          } else if (hasFailingEvidence || hasInconclusiveEvidence) {
             stateMachine.apply(StateEvent.VERIFICATION_FAILED, {
               evidenceIds: evidenceCreated.map((e) => e.id),
             });
           }
         }
       } catch {
-        if (stateMachine.phase === AgentPhase.REPAIR && hasFailingEvidence) {
+        if (stateMachine.phase === AgentPhase.REPAIR && (hasFailingEvidence || hasInconclusiveEvidence)) {
           try {
             stateMachine.apply(StateEvent.ESCALATE);
           } catch {
@@ -708,13 +816,32 @@ async function executeSingleProposalWithPolicy(
         metadata: { toolCallId, toolName, ruleId: evaluation.ruleId, errorCode: 'POLICY_DENIED', outcome: 'POLICY_DENIED' },
       };
     }
+
+    if (
+      evaluation.decision === PolicyDecisionType.REQUIRE_APPROVAL ||
+      evaluation.decision === PolicyDecisionType.ESCALATE
+    ) {
+      const errorPayload = JSON.stringify({
+        success: false,
+        errorCode: 'REQUIRES_APPROVAL',
+        message: `Execution requires approval by policy rule [${evaluation.ruleId ?? 'default'}]: ${evaluation.reason}`,
+      });
+      return {
+        actionId: proposal.id,
+        status: ActionResultStatus.DENIED,
+        output: errorPayload,
+        durationMs: 0,
+        error: errorPayload,
+        executedAt: clock.now(),
+        metadata: { toolCallId, toolName, ruleId: evaluation.ruleId, errorCode: 'REQUIRES_APPROVAL', outcome: 'REQUIRES_APPROVAL' },
+      };
+    }
   }
 
   try {
     const result = await params.toolExecutor!.execute({
       tool,
       input,
-      requiresPolicy: false,
     });
 
     const outputContent = result.success

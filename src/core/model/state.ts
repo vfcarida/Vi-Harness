@@ -147,6 +147,8 @@ export const RUNTIME_ONLY_EVENTS: ReadonlySet<StateEvent> = new Set([
   StateEvent.MAX_REPAIRS_EXCEEDED,
   StateEvent.CANCEL,
   StateEvent.BLOCK, // Blocking is a runtime decision, not an LLM decision
+  StateEvent.MARK_DONE, // Marking done is a runtime verification decision, not an LLM decision
+  StateEvent.VERIFICATION_PASSED, // Verification passed is an empirical test outcome, not an LLM decision
 ]);
 
 // ---------------------------------------------------------------------------
