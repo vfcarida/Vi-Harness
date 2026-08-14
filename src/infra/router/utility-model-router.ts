@@ -21,11 +21,14 @@ import type {
   RoutingRequest,
   RoutingDecision,
   ModelScore,
+  DualModelConfig,
+  ModelRole,
 } from '../../core/model/router-types.js';
 import {
   TaskCategory,
   ModelPolicyRule,
 } from '../../core/model/router-types.js';
+import { AgentPhase } from '../../core/model/state.js';
 import { ModelCapability } from '../../core/model/model-io.js';
 import { CapabilityMatcher } from './capability-matcher.js';
 import { ModelHealthRegistry } from './health-registry.js';
@@ -36,6 +39,7 @@ import { ErrorCode, ErrorCategory } from '../../core/errors/error-codes.js';
 export interface UtilityModelRouterOptions {
   readonly healthRegistry?: ModelHealthRegistry;
   readonly deterministic?: boolean;
+  readonly dualModelConfig?: DualModelConfig;
 }
 
 const TASK_VALUES: Record<TaskCategory, number> = {
@@ -54,12 +58,14 @@ const TASK_VALUES: Record<TaskCategory, number> = {
 
 export class UtilityModelRouter implements ModelRouter {
   private readonly providers = new Map<string, ModelProvider>();
-  private readonly healthRegistry: ModelHealthRegistry;
+  public readonly healthRegistry: ModelHealthRegistry;
   private isDeterministic: boolean;
+  private dualModelConfig?: DualModelConfig;
 
   constructor(options: UtilityModelRouterOptions = {}) {
     this.healthRegistry = options.healthRegistry ?? new ModelHealthRegistry();
     this.isDeterministic = options.deterministic ?? false;
+    this.dualModelConfig = options.dualModelConfig;
   }
 
   registerProvider(provider: ModelProvider): void {
@@ -78,6 +84,14 @@ export class UtilityModelRouter implements ModelRouter {
     this.isDeterministic = enabled;
   }
 
+  setDualModelConfig(config?: DualModelConfig): void {
+    this.dualModelConfig = config;
+  }
+
+  getDualModelConfig(): DualModelConfig | undefined {
+    return this.dualModelConfig;
+  }
+
   async route(request: RoutingRequest): Promise<RoutingDecision> {
     if (this.providers.size === 0) {
       throw new HarnessError({
@@ -87,7 +101,79 @@ export class UtilityModelRouter implements ModelRouter {
       });
     }
 
-    // 1. Explicit preferred provider check
+    const appliedPolicies: string[] = [];
+    const effectiveDualConfig = request.dualModelConfig ?? this.dualModelConfig;
+
+    // Determine target role (ARCHITECT vs EDITOR vs GENERALIST)
+    let targetRole: ModelRole = 'GENERALIST';
+    if (request.targetRole) {
+      targetRole = request.targetRole;
+    } else if (
+      effectiveDualConfig?.phaseRoleMapping &&
+      request.currentState &&
+      effectiveDualConfig.phaseRoleMapping[request.currentState]
+    ) {
+      targetRole = effectiveDualConfig.phaseRoleMapping[request.currentState]!;
+    } else if (
+      request.currentState === AgentPhase.INIT ||
+      request.currentState === AgentPhase.EXPLORE ||
+      request.currentState === AgentPhase.PLAN ||
+      request.taskCategory === TaskCategory.ARCHITECTURE
+    ) {
+      targetRole = 'ARCHITECT';
+    } else if (
+      request.currentState === AgentPhase.IMPLEMENT ||
+      request.currentState === AgentPhase.VERIFY ||
+      request.currentState === AgentPhase.REPAIR ||
+      request.taskCategory === TaskCategory.CODE_GEN ||
+      request.taskCategory === TaskCategory.BUG_FIX ||
+      request.taskCategory === TaskCategory.REFACTOR
+    ) {
+      targetRole = 'EDITOR';
+    }
+
+    // 1. Dual-Model Explicit Role Provider Routing
+    if (effectiveDualConfig) {
+      appliedPolicies.push(ModelPolicyRule.DUAL_MODEL_ARCHITECT_EDITOR);
+
+      if (targetRole === 'ARCHITECT' && effectiveDualConfig.architectProviderId) {
+        const architect = this.providers.get(effectiveDualConfig.architectProviderId);
+        if (architect && (await this.healthRegistry.isHealthy(architect))) {
+          const match = CapabilityMatcher.match(architect.descriptor, request);
+          if (match.matches) {
+            appliedPolicies.push(ModelPolicyRule.ARCHITECT_HIGH_REASONING);
+            return {
+              selectedProvider: architect,
+              selectedModelId: effectiveDualConfig.architectModelId ?? architect.descriptor.id,
+              scores: [],
+              rationale: `Dual-Model Mode: Routed to dedicated ARCHITECT provider [${architect.providerId}] for phase [${request.currentState ?? 'PLAN'}]. Policies: [${appliedPolicies.join(', ')}]`,
+              decidedAt: new Date(),
+              deterministic: this.isDeterministic,
+            };
+          }
+        }
+      }
+
+      if (targetRole === 'EDITOR' && effectiveDualConfig.editorProviderId) {
+        const editor = this.providers.get(effectiveDualConfig.editorProviderId);
+        if (editor && (await this.healthRegistry.isHealthy(editor))) {
+          const match = CapabilityMatcher.match(editor.descriptor, request);
+          if (match.matches) {
+            appliedPolicies.push(ModelPolicyRule.EDITOR_COST_EFFICIENT_CODING);
+            return {
+              selectedProvider: editor,
+              selectedModelId: effectiveDualConfig.editorModelId ?? editor.descriptor.id,
+              scores: [],
+              rationale: `Dual-Model Mode: Routed to dedicated EDITOR provider [${editor.providerId}] for phase [${request.currentState ?? 'EXECUTE'}]. Policies: [${appliedPolicies.join(', ')}]`,
+              decidedAt: new Date(),
+              deterministic: this.isDeterministic,
+            };
+          }
+        }
+      }
+    }
+
+    // 2. Explicit preferred provider check
     if (request.preferredProviderId) {
       const preferred = this.providers.get(request.preferredProviderId);
       if (preferred) {
@@ -109,7 +195,6 @@ export class UtilityModelRouter implements ModelRouter {
     }
 
     const candidateScores: ModelScore[] = [];
-    const appliedPolicies: string[] = [];
 
     // Check budget critical state
     const isBudgetCritical =
@@ -125,8 +210,10 @@ export class UtilityModelRouter implements ModelRouter {
       appliedPolicies.push(ModelPolicyRule.HIGH_RISK_APPROVED);
     }
     if (request.isRepetitive) appliedPolicies.push(ModelPolicyRule.REPETITIVE_SMALL);
+    if (targetRole === 'ARCHITECT') appliedPolicies.push(ModelPolicyRule.ARCHITECT_HIGH_REASONING);
+    if (targetRole === 'EDITOR') appliedPolicies.push(ModelPolicyRule.EDITOR_COST_EFFICIENT_CODING);
 
-    // 2. Score all registered providers
+    // 3. Score all registered providers
     for (const provider of this.providers.values()) {
       const descriptor = provider.descriptor;
 
@@ -142,8 +229,8 @@ export class UtilityModelRouter implements ModelRouter {
         continue; // Exclude incompatible model
       }
 
-      // Compute Expected Utility
-      const score = this.calculateUtility(provider, request, isBudgetCritical);
+      // Compute Expected Utility with Role Awareness
+      const score = this.calculateUtility(provider, request, isBudgetCritical, targetRole);
       candidateScores.push(score);
     }
 
@@ -151,12 +238,12 @@ export class UtilityModelRouter implements ModelRouter {
       throw new HarnessError({
         code: ErrorCode.MODEL_UNAVAILABLE,
         category: ErrorCategory.MODEL,
-        message: `No healthy model provider satisfies request (context: ${request.contextTokenCount} tokens, risk: ${request.risk})`,
+        message: `No healthy model provider satisfies request (context: ${request.contextTokenCount} tokens, risk: ${request.risk}, role: ${targetRole})`,
         context: { request },
       });
     }
 
-    // 3. Sort candidates by totalUtility descending
+    // 4. Sort candidates by totalUtility descending
     candidateScores.sort((a, b) => {
       const diff = b.totalUtility - a.totalUtility;
       if (Math.abs(diff) > 0.0001 || !this.isDeterministic) {
@@ -170,7 +257,7 @@ export class UtilityModelRouter implements ModelRouter {
     const selectedProvider = this.providers.get(topScore.providerId)!;
 
     const rationale =
-      `Selected ${selectedProvider.providerId} (${topScore.modelId}) with utility score ${topScore.totalUtility.toFixed(3)}. ` +
+      `Selected ${selectedProvider.providerId} (${topScore.modelId}) for role [${targetRole}] with utility score ${topScore.totalUtility.toFixed(3)}. ` +
       `[P(success)=${topScore.successProbability.toFixed(2)}, Cost=$${topScore.estimatedCostDollars.toFixed(4)}, ` +
       `RiskPenalty=${topScore.riskPenalty.toFixed(2)}]. Policies applied: [${appliedPolicies.join(', ')}]`;
 
@@ -188,6 +275,7 @@ export class UtilityModelRouter implements ModelRouter {
     provider: ModelProvider,
     request: RoutingRequest,
     isBudgetCritical: boolean,
+    targetRole: ModelRole = 'GENERALIST',
   ): ModelScore {
     const desc = provider.descriptor;
     const caps = desc.capabilities.capabilities;
@@ -203,7 +291,27 @@ export class UtilityModelRouter implements ModelRouter {
 
     let reasoningBonus = 0.0;
 
-    if (isHighComplexity) {
+    if (targetRole === 'ARCHITECT') {
+      // Architect role values deep reasoning and analytical capacity
+      if (hasReasoning) {
+        successProbability = 0.98;
+        reasoningBonus = 20.0;
+        if (desc.capabilities.maxOutputTokens >= 16000 || desc.costPer1kOutputTokensDollars >= 0.03) {
+          reasoningBonus += 10.0;
+        }
+      } else {
+        successProbability = 0.50;
+      }
+    } else if (targetRole === 'EDITOR') {
+      // Editor role values fast, high-quality code generation and tool usage
+      if (hasCoding && (isFullTierModel || request.complexity === 'LOW')) {
+        successProbability = 0.95;
+      } else if (hasCoding) {
+        successProbability = 0.65;
+      } else {
+        successProbability = 0.40;
+      }
+    } else if (isHighComplexity) {
       if (hasReasoning && hasCoding) {
         successProbability = 0.95;
         const isFrontierTier = desc.capabilities.maxOutputTokens >= 16000 || desc.costPer1kOutputTokensDollars >= 0.03;
@@ -233,6 +341,12 @@ export class UtilityModelRouter implements ModelRouter {
 
     // 4. Cost Penalty Factor
     let costWeight = 10.0; // Base cost weight
+    if (targetRole === 'ARCHITECT') {
+      costWeight = 2.0; // In Architect planning, quality precedes token savings
+    } else if (targetRole === 'EDITOR') {
+      costWeight = request.complexity === 'LOW' ? 60.0 : 12.0; // Prioritize sub-cent models on low complexity, full-tier on medium/high
+    }
+
     if (isBudgetCritical) {
       costWeight = 500.0; // Heavily penalize cost when budget is critical
     } else if (request.complexity === 'LOW') {
@@ -242,7 +356,7 @@ export class UtilityModelRouter implements ModelRouter {
     const costPenalty = estimatedCost * costWeight;
 
     // 5. Estimated Latency
-    const estimatedLatencyMs = (desc.costPer1kOutputTokensDollars > 0.005 ? 1200 : 400);
+    const estimatedLatencyMs = desc.costPer1kOutputTokensDollars > 0.005 ? 1200 : 400;
     const latencyWeight = request.latencyBudgetMs && estimatedLatencyMs > request.latencyBudgetMs ? 0.01 : 0.001;
     const latencyPenalty = estimatedLatencyMs * latencyWeight;
 

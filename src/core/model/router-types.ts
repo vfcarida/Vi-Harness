@@ -35,6 +35,20 @@ export type ComplexityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 // ---------------------------------------------------------------------------
+// Model Roles & Dual Model Configuration (Architect / Editor Mode)
+// ---------------------------------------------------------------------------
+
+export type ModelRole = 'ARCHITECT' | 'EDITOR' | 'GENERALIST';
+
+export interface DualModelConfig {
+  readonly architectProviderId?: string;
+  readonly editorProviderId?: string;
+  readonly architectModelId?: string;
+  readonly editorModelId?: string;
+  readonly phaseRoleMapping?: Partial<Record<AgentPhase, ModelRole>>;
+}
+
+// ---------------------------------------------------------------------------
 // Routing Request — Task & Context specification for model selection
 // ---------------------------------------------------------------------------
 
@@ -43,6 +57,8 @@ export interface RoutingRequest {
   readonly complexity: ComplexityLevel;
   readonly risk: RiskLevel;
   readonly currentState?: AgentPhase;
+  readonly targetRole?: ModelRole;
+  readonly dualModelConfig?: DualModelConfig;
   readonly contextTokenCount: number;
   readonly requiredCapabilities?: ReadonlyArray<ModelCapability>;
   readonly remainingBudgetDollars?: number;
@@ -93,4 +109,7 @@ export enum ModelPolicyRule {
   LONG_CONTEXT_REQUIRED = 'LONG_CONTEXT_REQUIRED',
   UNHEALTHY_EXCLUDED = 'UNHEALTHY_EXCLUDED',
   BUDGET_CRITICAL_LOW_COST = 'BUDGET_CRITICAL_LOW_COST',
+  DUAL_MODEL_ARCHITECT_EDITOR = 'DUAL_MODEL_ARCHITECT_EDITOR',
+  ARCHITECT_HIGH_REASONING = 'ARCHITECT_HIGH_REASONING',
+  EDITOR_COST_EFFICIENT_CODING = 'EDITOR_COST_EFFICIENT_CODING',
 }

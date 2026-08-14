@@ -126,16 +126,26 @@ export class IterationExecutor {
       initialObjects.reduce((acc: number, o: ContextObject) => acc + o.costTokens, 0) +
       Math.ceil((goal.description.length + task.description.length) / 4) +
       (recentEvidence ? recentEvidence.reduce((acc: number, e: Evidence) => acc + Math.ceil(e.summary.length / 4), 0) : 0);
-    const contextTokenCount = Math.max(1000, estimatedContextTokens);
+    const targetRole =
+      options?.targetRole ??
+      (currentState.phase === AgentPhase.PLAN ? 'ARCHITECT' : currentState.phase === AgentPhase.IMPLEMENT || currentState.phase === AgentPhase.REPAIR ? 'EDITOR' : undefined);
+
+    const dualModelConfig =
+      options?.dualModelConfig ?? (goal.metadata?.['dualModelConfig'] as any);
+
     const taskCategory =
       options?.taskCategory ??
       (currentState.phase === AgentPhase.PLAN ? TaskCategory.ARCHITECTURE : TaskCategory.CODE_GEN);
 
+    const contextTokenCount = Math.max(1000, estimatedContextTokens);
+
     const routingDecision = await router.route({
       taskCategory,
-      complexity: options?.complexity ?? 'MEDIUM',
+      complexity: options?.complexity ?? (targetRole === 'ARCHITECT' ? 'HIGH' : 'MEDIUM'),
       risk: options?.riskLevel ?? 'LOW',
       currentState: currentState.phase,
+      targetRole,
+      dualModelConfig,
       contextTokenCount,
       remainingBudgetDollars: goal.constraints.maxCostDollars - totalCostDollars,
       iterationCount: sequenceNumber,
@@ -263,6 +273,7 @@ export class IterationExecutor {
       task.id,
       iterationId,
       idFactory,
+      params.toolExecutor as any,
     );
 
     const isStoppingWithoutTools =
@@ -514,7 +525,14 @@ export class IterationExecutor {
     const hasFileWriteAction = actionProposals.some((p) => {
       if (p.type === ActionType.FILE_WRITE || p.type === ActionType.FILE_DELETE) return true;
       const toolName = extractToolName(p);
-      return toolName === 'write_file' || toolName === 'edit_file' || toolName === 'apply_patch';
+      return (
+        toolName === 'write_file' ||
+        toolName === 'edit_file' ||
+        toolName === 'apply_patch' ||
+        toolName.includes('write') ||
+        toolName.includes('edit') ||
+        toolName.includes('patch')
+      );
     });
 
     let nextEvent: StateEvent | null = null;

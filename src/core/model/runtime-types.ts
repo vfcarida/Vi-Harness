@@ -16,7 +16,7 @@ import type { ActionProposal, ActionResult } from './action.js';
 import type { Evidence } from './evidence.js';
 import type { TokenUsage } from './model-io.js';
 import type { TerminationDecision } from './termination.js';
-import type { TaskCategory, RiskLevel, ComplexityLevel } from './router-types.js';
+import type { TaskCategory, RiskLevel, ComplexityLevel, ModelRole, DualModelConfig } from './router-types.js';
 import type { ContextObject } from './context-object.js';
 import type { PolicyDecisionType } from './policy.js';
 
@@ -145,6 +145,8 @@ export interface ExecutionOptions {
   readonly taskCategory?: TaskCategory;
   readonly riskLevel?: RiskLevel;
   readonly complexity?: ComplexityLevel;
+  readonly targetRole?: ModelRole;
+  readonly dualModelConfig?: DualModelConfig;
   readonly signal?: AbortSignal;
   readonly relevantObjects?: ReadonlyArray<ContextObject>;
 }

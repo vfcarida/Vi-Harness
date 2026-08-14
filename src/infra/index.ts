@@ -150,6 +150,8 @@ export type { PiHarnessAdapterRunnerOptions } from './eval/pi-harness-adapter-ru
 export { MarkdownReportGenerator } from './eval/markdown-report-generator.js';
 export { DefaultBenchmarkRunner } from './eval/default-benchmark-runner.js';
 export type { DefaultBenchmarkRunnerOptions } from './eval/default-benchmark-runner.js';
+export { DualModelCostEvaluator } from './eval/dual-model-cost-evaluator.js';
+export type { DualModelEvaluationReport, PhaseCostBreakdown } from './eval/dual-model-cost-evaluator.js';
 
 // Performance Optimization Subsystem
 export { PerformanceProfiler, TelemetryCategory } from './optimization/performance-profiler.js';

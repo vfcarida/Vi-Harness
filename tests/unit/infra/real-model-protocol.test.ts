@@ -51,7 +51,7 @@ describe('Real Model Protocol Suite', () => {
       expect(MessageRole.ASSISTANT).toBe('ASSISTANT');
       expect(MessageRole.TOOL_CALL).toBe('TOOL_CALL');
       expect(MessageRole.TOOL_RESULT).toBe('TOOL_RESULT');
-      expect(MessageRole.TOOL).toBe('TOOL_RESULT');
+      expect(MessageRole.TOOL).toBe('TOOL');
     });
 
     it('should construct rich ModelMessage objects with toolCalls and toolResult fields', () => {

@@ -52,7 +52,7 @@ export enum MessageRole {
   ASSISTANT = 'ASSISTANT',
   TOOL_CALL = 'TOOL_CALL',
   TOOL_RESULT = 'TOOL_RESULT',
-  TOOL = 'TOOL_RESULT', // Backward-compatible alias for TOOL_RESULT
+  TOOL = 'TOOL',
 }
 
 export interface ModelMessage {
