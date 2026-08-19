@@ -22,3 +22,6 @@ export * from './state-machine/index.js';
 
 // Goal lifecycle and token attribution
 export * from './goal/index.js';
+
+// Event-sourced tree sessions
+export * from './session/index.js';

@@ -37,6 +37,7 @@ export type EscalationId = Id<'Escalation'>;
 export type RegressionId = Id<'Regression'>;
 export type ConstraintId = Id<'Constraint'>;
 export type MemoryId = Id<'Memory'>;
+export type SessionId = Id<'Session'>;
 
 // ---------------------------------------------------------------------------
 // IdFactory — abstraction over ID generation
