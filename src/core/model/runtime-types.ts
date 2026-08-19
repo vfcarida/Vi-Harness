@@ -149,6 +149,10 @@ export interface ExecutionOptions {
   readonly dualModelConfig?: DualModelConfig;
   readonly signal?: AbortSignal;
   readonly relevantObjects?: ReadonlyArray<ContextObject>;
+  readonly preserveUserChanges?: boolean; // Default true (two-phase commit)
+  readonly autoLintAfterWrite?: boolean;
+  readonly autoTestAfterWrite?: boolean;
+  readonly maxAutoCorrectionsPerFile?: number; // Default 2
 }
 
 export interface ExecutionResult {

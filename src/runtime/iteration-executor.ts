@@ -55,7 +55,7 @@ import type { Iteration } from '../core/model/iteration.js';
 import { IterationOutcome } from '../core/model/iteration.js';
 import { ContextTier } from '../core/model/context.js';
 import type { ContextObject } from '../core/model/context-object.js';
-import { VerificationStatus, type VerificationResult } from '../core/model/verification.js';
+import { VerificationProfile, VerificationStatus, type VerificationResult } from '../core/model/verification.js';
 
 export interface IterationExecutorParams {
   readonly executionId: ExecutionId;
@@ -391,6 +391,116 @@ export class IterationExecutor {
           timestamp: now,
           data: { evidence: ev },
         });
+      }
+    }
+
+    // Auto-Lint / Auto-Test Feedback Loop (Aider-style automatic verification after write)
+    for (const res of toolResults) {
+      if (res.status === ActionResultStatus.SUCCESS) {
+        const toolName = String(res.metadata?.['toolName'] ?? '').toLowerCase();
+        const writtenFilePath = String(
+          res.metadata?.['path'] ?? res.metadata?.['filePath'] ?? res.metadata?.['targetFile'] ?? '',
+        );
+
+        const isWriteAction =
+          toolName === 'write_file' ||
+          toolName === 'edit_file' ||
+          toolName === 'apply_patch' ||
+          toolName.includes('write') ||
+          toolName.includes('edit');
+
+        if (isWriteAction && writtenFilePath && params.verificationEngine) {
+          const maxAutoCorrections = options?.maxAutoCorrectionsPerFile ?? 2;
+
+          // Count previous auto-correction failures for this file in prior iterations
+          let priorCorrectionsForFile = 0;
+          for (const iter of iterationsSoFar) {
+            for (const ev of iter.evidenceCreated) {
+              if (
+                ev.affectedFiles.includes(writtenFilePath) &&
+                (ev.summary.includes('[AUTO-LINT FAILURE]') || ev.summary.includes('[AUTO-TEST FAILURE]'))
+              ) {
+                priorCorrectionsForFile++;
+              }
+            }
+          }
+
+          if (priorCorrectionsForFile < maxAutoCorrections) {
+            // 1. Auto-Lint Check
+            if (options?.autoLintAfterWrite) {
+              try {
+                const lintResult = await params.verificationEngine.verify(
+                  { type: 'lint', path: writtenFilePath, taskId: task.id },
+                  VerificationProfile.FAST,
+                );
+                if (lintResult.status === VerificationStatus.FAILED) {
+                  const ev: Evidence = {
+                    id: idFactory.create<'Evidence'>(),
+                    taskId: task.id,
+                    type: EvidenceType.LINT_RESULT,
+                    outcome: EvidenceOutcome.FAIL,
+                    summary: `[AUTO-LINT FAILURE] in ${writtenFilePath}: ${lintResult.summary}`,
+                    data: { file: writtenFilePath, lintResult, retryCount: priorCorrectionsForFile + 1 },
+                    createdAt: now,
+                    pass: false,
+                    confidence: 0.95,
+                    affectedFiles: [writtenFilePath],
+                  };
+                  evidenceCreated.push(ev);
+                  if (params.evidenceStore) {
+                    await params.evidenceStore.record(ev);
+                  }
+                  observerHub.emit({
+                    type: AgentEventType.EvidenceCreated,
+                    executionId,
+                    taskId: task.id,
+                    timestamp: now,
+                    data: { evidence: ev },
+                  });
+                }
+              } catch {
+                // Ignore verification invocation failure
+              }
+            }
+
+            // 2. Auto-Test Check (Impacted Tests)
+            if (options?.autoTestAfterWrite) {
+              try {
+                const testResult = await params.verificationEngine.verify(
+                  { type: 'test-impacted', path: writtenFilePath, taskId: task.id },
+                  VerificationProfile.FAST,
+                );
+                if (testResult.status === VerificationStatus.FAILED) {
+                  const ev: Evidence = {
+                    id: idFactory.create<'Evidence'>(),
+                    taskId: task.id,
+                    type: EvidenceType.TEST_RESULT,
+                    outcome: EvidenceOutcome.FAIL,
+                    summary: `[AUTO-TEST FAILURE] in ${writtenFilePath}: ${testResult.summary}`,
+                    data: { file: writtenFilePath, testResult, retryCount: priorCorrectionsForFile + 1 },
+                    createdAt: now,
+                    pass: false,
+                    confidence: 0.95,
+                    affectedFiles: [writtenFilePath],
+                  };
+                  evidenceCreated.push(ev);
+                  if (params.evidenceStore) {
+                    await params.evidenceStore.record(ev);
+                  }
+                  observerHub.emit({
+                    type: AgentEventType.EvidenceCreated,
+                    executionId,
+                    taskId: task.id,
+                    timestamp: now,
+                    data: { evidence: ev },
+                  });
+                }
+              } catch {
+                // Ignore verification invocation failure
+              }
+            }
+          }
+        }
       }
     }
 

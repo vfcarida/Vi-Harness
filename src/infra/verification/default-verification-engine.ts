@@ -28,6 +28,7 @@ import {
 import type { Evidence } from '../../core/model/evidence.js';
 import { EvidenceOutcome, EvidenceType } from '../../core/model/evidence.js';
 import type { Regression } from '../../core/model/regression.js';
+import { scrubEnv } from '../security/env-scrubber.js';
 
 const execAsync = promisify(exec);
 
@@ -397,6 +398,42 @@ export class DefaultVerificationEngine implements VerificationEngine {
     const lintCmd = isTestEnvironment ? 'node -e "process.exit(0)"' : 'npm run lint';
     const testCmd = isTestEnvironment ? 'node -e "process.exit(0)"' : 'npm test';
 
+    if (target.type === 'lint') {
+      const lintTargetCmd = target.path
+        ? isTestEnvironment
+          ? 'node -e "process.exit(0)"'
+          : `npx eslint ${target.path}`
+        : lintCmd;
+      return [
+        {
+          checkId: `lint-${target.path ?? 'repo'}`,
+          name: `Lint Check (${target.path ?? 'repository'})`,
+          command: lintTargetCmd,
+          category: 'linter',
+          scope: target.path ? 'file' : 'repository',
+          timeoutMs: 15000,
+        },
+      ];
+    }
+
+    if (target.type === 'test-impacted') {
+      const testTargetCmd = target.path
+        ? isTestEnvironment
+          ? 'node -e "process.exit(0)"'
+          : `npx vitest run --related ${target.path}`
+        : testCmd;
+      return [
+        {
+          checkId: `test-impacted-${target.path ?? 'repo'}`,
+          name: `Impacted Test Check (${target.path ?? 'repository'})`,
+          command: testTargetCmd,
+          category: 'unit-test',
+          scope: target.path ? 'file' : 'repository',
+          timeoutMs: 30000,
+        },
+      ];
+    }
+
     switch (profile) {
       case VerificationProfile.FAST:
         return [
@@ -471,6 +508,7 @@ export class DefaultVerificationEngine implements VerificationEngine {
       const { stdout, stderr } = await execAsync(commandToRun, {
         cwd: this.workingDirectory,
         timeout: timeoutMs,
+        env: scrubEnv(process.env as Record<string, string>),
       });
 
       const durationMs = Date.now() - start;

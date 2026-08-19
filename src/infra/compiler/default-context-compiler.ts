@@ -359,27 +359,34 @@ export class DefaultContextCompiler implements ContextCompiler {
       });
     }
 
-    // Recent Evidence (L1 Working Memory)
+    // Recent Evidence & Auto-Lint/Test Feedback (L0 Hot Context for auto-feedback / failures)
     if (request.recentEvidence) {
       for (const ev of request.recentEvidence) {
+        const isAutoFeedback =
+          ev.summary.includes('[AUTO-LINT FAILURE]') ||
+          ev.summary.includes('[AUTO-TEST FAILURE]') ||
+          !ev.pass;
+        const tier = isAutoFeedback ? ContextTier.L0_HOT : ContextTier.L1_WORKING;
+        const importance = isAutoFeedback ? 0.95 : 0.8;
+
         candidates.push({
           id: this.idFactory.create<'Context'>(),
-          tier: ContextTier.L1_WORKING,
+          tier,
           type: ev.pass ? ContextObjectType.EVIDENCE : ContextObjectType.FAILURE,
           content: `Evidence [${ev.type}] (${ev.pass ? 'PASS' : 'FAIL'}): ${ev.summary}`,
           source: 'verification_engine',
           timestamp: ev.createdAt,
-          importance: ev.pass ? 0.8 : 0.95, // Failures have high importance
+          importance,
           confidence: 1.0,
           scope: ContextScope.TASK,
           dependencies: [],
           lastUsed: now,
           lastVerified: ev.createdAt,
           costTokens: Math.ceil(ev.summary.length / 4),
-          tags: ev.pass ? ['evidence', 'pass'] : ['evidence', 'fail', 'must_preserve'],
+          tags: ev.pass ? ['evidence', 'pass'] : ['evidence', 'fail', 'auto_feedback', 'must_preserve'],
           version: 1,
           active: true,
-          metadata: ev.data,
+          metadata: { evidenceId: ev.id, outcome: ev.outcome },
         });
       }
     }

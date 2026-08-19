@@ -97,6 +97,7 @@ export type { DefaultToolExecutorOptions } from './tools/default-tool-executor.j
 // Security & Execution Policy Layer
 export { ContextSanitizer } from './security/context-sanitizer.js';
 export { SecretScrubber } from './security/secret-scrubber.js';
+export { scrubEnv, SENSITIVE_PATTERNS, SecureTempManager } from './security/env-scrubber.js';
 export { PathValidator } from './security/path-validator.js';
 export type { PathValidationResult } from './security/path-validator.js';
 export { RiskClassifier } from './security/risk-classifier.js';

@@ -15,6 +15,8 @@ import type { WorkspaceState } from '../../core/model/git-types.js';
 import { HarnessError } from '../../core/errors/base-error.js';
 import { ErrorCode, ErrorCategory } from '../../core/errors/error-codes.js';
 
+import { scrubEnv } from '../security/env-scrubber.js';
+
 const execFileAsync = promisify(execFile);
 
 export interface RealGitManagerOptions {
@@ -29,6 +31,7 @@ export class RealGitManager implements GitManager {
   private baselineCaptured = false;
   private baselineHeadSha = '';
   private baselineBranchName = '';
+  private userStateCommitSha?: string;
 
   constructor(options: RealGitManagerOptions) {
     if (!options.workingDir) {
@@ -51,13 +54,19 @@ export class RealGitManager implements GitManager {
     return this.baselineBranchName;
   }
 
-  /** Run a git CLI command in workingDir. */
+  /** Return user-state commit SHA created during two-phase commit (if any). */
+  get userStateCommit(): string | undefined {
+    return this.userStateCommitSha;
+  }
+
+  /** Run a git CLI command in workingDir with environment scrubbing. */
   private async execGit(args: ReadonlyArray<string>): Promise<string> {
     try {
       const { stdout } = await execFileAsync('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
         cwd: this.workingDir,
         encoding: 'utf-8',
         maxBuffer: 10 * 1024 * 1024,
+        env: scrubEnv(process.env as Record<string, string>),
       });
       return stdout;
     } catch (err: unknown) {
@@ -84,7 +93,38 @@ export class RealGitManager implements GitManager {
     return porcelain.length > 0;
   }
 
-  async captureBaseline(): Promise<WorkspaceState> {
+  /**
+   * Prepares two-phase commit: If repository has uncommitted dirty changes,
+   * creates a user-state commit before agent execution so rollbacks only undo agent changes.
+   */
+  async prepareTwoPhaseCommit(options?: {
+    preserveUserChanges?: boolean;
+    commitMessage?: string;
+  }): Promise<{ userStateCommit?: string; wasDirty: boolean }> {
+    const dirty = await this.isDirty();
+    if (!dirty) {
+      this.userStateCommitSha = undefined;
+      return { wasDirty: false };
+    }
+
+    if (options?.preserveUserChanges === false) {
+      return { wasDirty: true };
+    }
+
+    const message =
+      options?.commitMessage ?? '[vi-harness] preserve user changes before agent execution';
+    const commitSha = await this.createCommit(message);
+    this.userStateCommitSha = commitSha;
+    this.baselineHeadSha = commitSha;
+    return { userStateCommit: commitSha, wasDirty: true };
+  }
+
+  async captureBaseline(options?: { preserveUserChanges?: boolean }): Promise<WorkspaceState> {
+    // If preserveUserChanges is explicitly enabled and workspace is dirty, perform two-phase commit
+    if (options?.preserveUserChanges === true && (await this.isDirty())) {
+      await this.prepareTwoPhaseCommit(options);
+    }
+
     const status = await this.getStatus();
     this.baselineHeadSha = status.headCommit;
     this.baselineBranchName = status.currentBranch;
@@ -230,7 +270,14 @@ export class RealGitManager implements GitManager {
     } else {
       // Tracked file: checkout/restore specified ref or HEAD
       const targetRef = ref ?? 'HEAD';
-      await this.execGit(['checkout', targetRef, '--', normPath]);
+      try {
+        await this.execGit(['checkout', targetRef, '--', normPath]);
+      } catch {
+        // If file didn't exist in targetRef (created by agent in a later commit), delete it to restore state
+        if (fs.existsSync(fullPath)) {
+          await fs.promises.rm(fullPath, { force: true, recursive: true });
+        }
+      }
     }
 
     this.explicitFileOwners.delete(normPath);
