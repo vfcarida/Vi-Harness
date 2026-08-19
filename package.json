@@ -25,11 +25,13 @@
     "clean": "node -e \"const fs=require('fs');fs.rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "uuid": "^11.1.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.10.0",
     "@types/uuid": "^10.0.0",
     "eslint": "^9.0.0",

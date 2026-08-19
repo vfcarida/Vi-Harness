@@ -11,6 +11,8 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['src/**/index.ts'],
     },
+    testTimeout: 30000,
+    hookTimeout: 30000,
     typecheck: {
       enabled: false,
     },

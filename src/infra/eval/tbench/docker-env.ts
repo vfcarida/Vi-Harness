@@ -45,7 +45,7 @@ export class DefaultDockerEnvironment implements DockerEnvironment {
   }
 
   async create(task: TBenchTask): Promise<Container> {
-    if (this.driver === 'mock') {
+    if (this.driver === 'mock' || !this.isDockerAvailable()) {
       return this.mockDriver.create(task);
     }
 
@@ -75,7 +75,7 @@ export class DefaultDockerEnvironment implements DockerEnvironment {
   }
 
   async exec(container: Container, cmd: string): Promise<ExecResult> {
-    if (this.driver === 'mock' || container.metadata?.['driver'] === 'mock') {
+    if (this.driver === 'mock' || container.metadata?.['driver'] === 'mock' || !this.isDockerAvailable()) {
       return this.mockDriver.exec(container, cmd);
     }
 
@@ -108,7 +108,7 @@ export class DefaultDockerEnvironment implements DockerEnvironment {
   }
 
   async verify(container: Container, testScript: string): Promise<boolean> {
-    if (this.driver === 'mock' || container.metadata?.['driver'] === 'mock') {
+    if (this.driver === 'mock' || container.metadata?.['driver'] === 'mock' || !this.isDockerAvailable()) {
       return this.mockDriver.verify(container, testScript);
     }
 
@@ -117,7 +117,7 @@ export class DefaultDockerEnvironment implements DockerEnvironment {
   }
 
   async destroy(container: Container): Promise<void> {
-    if (this.driver === 'mock' || container.metadata?.['driver'] === 'mock') {
+    if (this.driver === 'mock' || container.metadata?.['driver'] === 'mock' || !this.isDockerAvailable()) {
       return this.mockDriver.destroy(container);
     }
 

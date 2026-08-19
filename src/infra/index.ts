@@ -359,4 +359,30 @@ export type {
   AcpHandlerOptions,
 } from './acp/index.js';
 
+// Persistent Storage (SQLite)
+export {
+  SqliteStore,
+  SqliteSessionStore,
+  SqliteExperienceStore,
+  SqliteMemoryCurator,
+  SqliteMetricsSink,
+  computeTaskHash,
+  MIGRATION_001_SQL,
+} from './storage/index.js';
+export type {
+  BatchOp,
+  StorageEngine,
+  SessionSummary,
+  SqliteSessionStoreOptions,
+  ExperienceRecord,
+  SqliteExperienceStoreOptions,
+  MemoryScope,
+  MemoryStatus,
+  MemoryEntry,
+  SqliteMemoryCuratorOptions,
+  MetricRecord,
+  SessionMetricsAggregation,
+  SqliteMetricsSinkOptions,
+} from './storage/index.js';
+
 

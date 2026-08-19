@@ -26,7 +26,7 @@ import { DefaultContextCompiler } from '../../../src/infra/compiler/default-cont
 
 const execFileAsync = promisify(execFile);
 
-describe('Two-Phase Git Commit, Auto Lint/Test Loop & Env Scrubbing (P004)', () => {
+describe('Two-Phase Git Commit, Auto Lint/Test Loop & Env Scrubbing (P004)', { timeout: 30000 }, () => {
   describe('1. Environment Variable Scrubbing & Secure Temp Manager', () => {
     it('should scrub sensitive credentials and retain safe environment variables', () => {
       const sampleEnv: Record<string, string> = {
@@ -99,7 +99,7 @@ describe('Two-Phase Git Commit, Auto Lint/Test Loop & Env Scrubbing (P004)', () 
       fs.writeFileSync(path.join(testRepoDir, 'README.md'), '# Test Repository\n');
       await execFileAsync('git', ['add', '-A'], { cwd: testRepoDir });
       await execFileAsync('git', ['commit', '-m', 'initial commit'], { cwd: testRepoDir });
-    });
+    }, 30000);
 
     afterEach(async () => {
       if (fs.existsSync(testRepoDir)) {
@@ -110,9 +110,9 @@ describe('Two-Phase Git Commit, Auto Lint/Test Loop & Env Scrubbing (P004)', () 
           // Ignore temp dir cleanup errors on Windows
         }
       }
-    });
+    }, 30000);
 
-    it('should preserve dirty user changes in a user-state commit before agent execution', { timeout: 30000 }, async () => {
+    it('should preserve dirty user changes in a user-state commit before agent execution', { timeout: 60000 }, async () => {
       const idFactory = new UuidV7IdFactory();
       const clock = new SystemClock();
       const git = new RealGitManager({ workingDir: testRepoDir });

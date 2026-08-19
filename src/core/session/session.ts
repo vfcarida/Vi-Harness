@@ -122,7 +122,9 @@ export class DefaultSession implements Session {
       createdAt: now,
       cwd: this._header.cwd,
       parentSession: this._header.id,
+      parentId: this._header.id,
       seedLength,
+      branchPoint: targetBoundary,
       delegationDepth: (this._header.delegationDepth ?? 0) + 1,
       metadata: {
         ...this._header.metadata,

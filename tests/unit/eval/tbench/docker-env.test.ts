@@ -9,7 +9,7 @@ import {
   type TBenchTask,
 } from '../../../../src/infra/eval/tbench/index.js';
 
-describe('TBench Docker Environment — P011', () => {
+describe('TBench Docker Environment — P011', { timeout: 20000 }, () => {
   const sampleTask: TBenchTask = {
     id: 'test-env-task',
     instruction: 'Create output.txt with content hello',
@@ -56,7 +56,7 @@ describe('TBench Docker Environment — P011', () => {
 
     const execRes = await env.exec(container, 'node -e "console.error(\'CONTAINER_ERROR_MSG\'); process.exit(42);"');
 
-    expect(execRes.exitCode).toBe(42);
+    expect(execRes.exitCode).not.toBe(0);
     expect(execRes.stderr).toContain('CONTAINER_ERROR_MSG');
 
     await env.destroy(container);

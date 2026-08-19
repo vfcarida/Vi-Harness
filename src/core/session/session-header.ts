@@ -11,7 +11,9 @@ export interface SessionHeader {
   readonly createdAt: number;
   readonly cwd?: string;
   readonly parentSession?: SessionId;
+  readonly parentId?: SessionId;
   readonly seedLength?: number;
+  readonly branchPoint?: number;
   readonly delegationDepth?: number;
   readonly metadata?: Readonly<Record<string, unknown>>;
 }

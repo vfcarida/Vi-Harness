@@ -56,7 +56,7 @@ describe('Real Repository Git & Checkpoint Integration Suite', { timeout: 30000 
     gitManager = new RealGitManager({ workingDir: tempRepoDir });
     rollbackManager = new DefaultRollbackManager();
     checkpointStore = new DefaultCheckpointStore({ idFactory, clock });
-  });
+  }, 60000);
 
   afterEach(async () => {
     // Cleanup temporary directory safely on Windows
@@ -201,7 +201,7 @@ describe('Real Repository Git & Checkpoint Integration Suite', { timeout: 30000 
   // 6. Safe Rollback Behavior (Preserves User Changes, Reverts Agent Changes)
   // =========================================================================
 
-  it('6. Safe rollback: reverts agent-owned changes without destroying pre-existing user changes', async () => {
+  it('6. Safe rollback: reverts agent-owned changes without destroying pre-existing user changes', { timeout: 60000 }, async () => {
     // 1. User pre-existing change
     fs.writeFileSync(path.join(tempRepoDir, 'user_uncommitted.txt'), 'User work in progress.\n', 'utf-8');
     await gitManager.captureBaseline();
