@@ -28,6 +28,7 @@
  * No magic numbers appear without a comment explaining their basis.
  */
 import type { GoalConstraints } from '../model/goal.js';
+import type { LifecycleGoal } from '../goal/goal-state.js';
 import type { Iteration, IterationFingerprint } from '../model/iteration.js';
 import type { AgentState, StateTransition } from '../model/state.js';
 import { AgentPhase } from '../model/state.js';
@@ -142,6 +143,7 @@ export function evaluateLoopControl(params: {
   transitions: ReadonlyArray<StateTransition>;
   elapsedMs: number;
   totalCostDollars: number;
+  goal?: LifecycleGoal;
   config?: LoopControlConfig;
 }): TerminationDecision {
   const config = params.config ?? DEFAULT_LOOP_CONTROL_CONFIG;
@@ -163,12 +165,45 @@ export function evaluateLoopControl(params: {
     });
   }
 
+  // --- Goal-Level Budgets (from DSH & Prime Agent) ---
+  if (params.goal) {
+    // 1. Goal round budget
+    const roundCheck = checkGoalRoundBudget(
+      params.goal.roundsStarted,
+      params.goal.maxRounds,
+      iterationsAnalyzed,
+    );
+    if (roundCheck.terminal) return roundCheck;
+
+    // 2. Goal token budget
+    if (params.goal.tokenBudget !== undefined) {
+      const tokenCheck = checkGoalTokenBudget(
+        params.goal.tokensUsed,
+        params.goal.tokenBudget,
+        iterationsAnalyzed,
+      );
+      if (tokenCheck.terminal) return tokenCheck;
+    }
+
+    // 3. Goal cost budget
+    if (params.goal.costBudget !== undefined) {
+      const costCheck = checkGoalCostBudget(
+        params.goal.costUsed,
+        params.goal.costBudget,
+        iterationsAnalyzed,
+      );
+      if (costCheck.terminal) return costCheck;
+    }
+  }
+
+  // --- Global Execution Budgets ---
   // --- 1. Maximum iterations ---
   {
     const current = Math.max(params.state.iterationCount, params.iterations.length);
     const check = checkMaxIterations(current, params.constraints.maxIterations, iterationsAnalyzed);
     if (check.terminal) return check;
   }
+
 
   // --- 2. Maximum cost ---
   {
@@ -236,6 +271,66 @@ export function evaluateLoopControl(params: {
 // ---------------------------------------------------------------------------
 // Individual checks — exported for deterministic unit testing
 // ---------------------------------------------------------------------------
+
+export function checkGoalRoundBudget(
+  roundsStarted: number,
+  maxRounds: number,
+  iterationsAnalyzed: number = 0,
+): TerminationDecision {
+  if (roundsStarted >= maxRounds) {
+    return terminate({
+      reason: TerminationReason.MAX_ITERATIONS,
+      evidence: [{
+        type: 'BUDGET_LIMIT',
+        description: `Goal round budget exhausted: ${roundsStarted} rounds reached maximum of ${maxRounds}.`,
+        data: { blockerCode: 'budget-exhausted', roundsStarted, maxRounds },
+      }],
+      iterationsAnalyzed,
+      recommendedAction: 'Increase goal maxRounds or clear goal',
+    });
+  }
+  return continueExecution();
+}
+
+export function checkGoalTokenBudget(
+  tokensUsed: number,
+  tokenBudget: number,
+  iterationsAnalyzed: number = 0,
+): TerminationDecision {
+  if (tokensUsed >= tokenBudget) {
+    return terminate({
+      reason: TerminationReason.MAX_COST,
+      evidence: [{
+        type: 'BUDGET_LIMIT',
+        description: `Goal token budget exhausted: ${tokensUsed} tokens reached configured limit of ${tokenBudget}.`,
+        data: { blockerCode: 'budget-exhausted', tokensUsed, tokenBudget },
+      }],
+      iterationsAnalyzed,
+      recommendedAction: 'Increase goal tokenBudget or simplify objective',
+    });
+  }
+  return continueExecution();
+}
+
+export function checkGoalCostBudget(
+  costUsed: number,
+  costBudget: number,
+  iterationsAnalyzed: number = 0,
+): TerminationDecision {
+  if (costUsed >= costBudget) {
+    return terminate({
+      reason: TerminationReason.MAX_COST,
+      evidence: [{
+        type: 'BUDGET_LIMIT',
+        description: `Goal cost budget exhausted: $${costUsed.toFixed(4)} reached configured limit of $${costBudget.toFixed(4)}.`,
+        data: { blockerCode: 'budget-exhausted', costUsed, costBudget },
+      }],
+      iterationsAnalyzed,
+      recommendedAction: 'Increase goal costBudget',
+    });
+  }
+  return continueExecution();
+}
 
 export function checkMaxIterations(
   current: number,

@@ -19,3 +19,6 @@ export * from './interfaces/index.js';
 
 // State machine
 export * from './state-machine/index.js';
+
+// Goal lifecycle and token attribution
+export * from './goal/index.js';

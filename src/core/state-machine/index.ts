@@ -34,6 +34,9 @@ export type { LoopFingerprint } from './loop-fingerprint.js';
 // Loop control
 export {
   evaluateLoopControl,
+  checkGoalRoundBudget,
+  checkGoalTokenBudget,
+  checkGoalCostBudget,
   checkMaxIterations,
   checkMaxCost,
   checkMaxDuration,
