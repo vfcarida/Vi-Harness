@@ -183,8 +183,11 @@ export class DefaultContextCompiler implements ContextCompiler {
   ): Promise<ContextObject[]> {
     const candidates: ContextObject[] = [];
 
-    // Long-Term Memory Retrieval (RAG: only active, relevant durable facts)
-    if (this.memoryStore) {
+    // Frozen Memory Snapshot vs Long-Term Memory Retrieval
+    if (request.frozenMemoryObjects && request.frozenMemoryObjects.length > 0) {
+      // Use frozen memory snapshot (preserves prefix cache across iterations)
+      candidates.push(...request.frozenMemoryObjects);
+    } else if (this.memoryStore) {
       try {
         const queryText = `${request.task.description} ${request.goal.description}`;
         const scoredMemories = await this.memoryStore.retrieve({
@@ -197,7 +200,7 @@ export class DefaultContextCompiler implements ContextCompiler {
           const mem = scored.record;
           if (
             (mem.status === MemoryStatus.ACTIVE || mem.status === MemoryStatus.PROMOTED) &&
-            ((scored.scoreBreakdown?.textSimilarity ?? 0) > 0 || scored.relevanceScore >= 0.75)
+            ((scored.scoreBreakdown?.textSimilarity ?? 0) > 0 || scored.relevanceScore >= 0.50)
           ) {
             candidates.push({
               id: this.idFactory.create<'Context'>(),

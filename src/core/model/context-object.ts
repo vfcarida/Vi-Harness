@@ -83,6 +83,7 @@ export interface ContextObject {
   readonly tags: ReadonlyArray<string>;
   readonly version: number;
   readonly active: boolean; // false when deactivated (preserved in history)
+  readonly immutableDuringExecution?: boolean; // When true, preserved across iterations without recompilation
   readonly metadata: Readonly<Record<string, unknown>>;
 }
 

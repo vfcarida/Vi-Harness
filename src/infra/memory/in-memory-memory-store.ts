@@ -213,6 +213,25 @@ export class InMemoryMemoryStore implements MemoryStore {
     return this.provider.updateRecord(id, updated);
   }
 
+  async updateRecord(id: MemoryId, updates: Partial<MemoryRecord>): Promise<MemoryRecord> {
+    const record = await this.provider.getRecord(id);
+    if (!record) {
+      throw new HarnessError({
+        code: ErrorCode.CONTEXT_COMPILATION_FAILED,
+        category: ErrorCategory.CONTEXT,
+        message: `MemoryRecord not found: ${id}`,
+      });
+    }
+
+    const updated: MemoryRecord = {
+      ...record,
+      ...updates,
+      updatedAt: this.clock.now(),
+    };
+
+    return this.provider.updateRecord(id, updated);
+  }
+
   async delete(id: MemoryId): Promise<boolean> {
     return this.provider.deleteRecord(id);
   }

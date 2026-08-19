@@ -78,6 +78,9 @@ export interface MemoryStore {
   /** Resolve a memory conflict by keeping winning record and invalidating losing record. */
   resolveConflict(conflictId: string, winningRecordId: MemoryId): Promise<MemoryRecord>;
 
+  /** Update an existing memory record. */
+  updateRecord(id: MemoryId, updates: Partial<MemoryRecord>): Promise<MemoryRecord>;
+
   /** Clear all memories. */
   clear(): Promise<void>;
 }

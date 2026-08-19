@@ -174,10 +174,23 @@ export class IterationExecutor {
         maxTokens: Math.min(10000, routingDecision.selectedProvider.descriptor.capabilities.maxContextTokens),
         softLimitTokens: 8000,
       },
+      relevantObjects: options?.relevantObjects,
+      frozenMemoryObjects: options?.frozenMemoryObjects,
     });
 
     // Construct structured messages for model (including prior tool outputs & evidence)
     const messages: ModelMessage[] = [];
+
+    // Inject mounted skill instructions (from DeepSeek Harness SelfModification)
+    if (options?.selfModification) {
+      const mountedContent = options.selfModification.getMountedSkillContent();
+      if (mountedContent && mountedContent.trim().length > 0) {
+        messages.push({
+          role: MessageRole.SYSTEM,
+          content: `# Active Mounted Skills & Instructions:\n\n${mountedContent}`,
+        });
+      }
+    }
 
     if (compilationResult.compiledContext.entries.length > 0) {
       for (const entry of compilationResult.compiledContext.entries) {

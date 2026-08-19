@@ -54,3 +54,4 @@ export * from './symbol-types.js';
 export * from './trace-types.js';
 export * from './caching-types.js';
 export * from './pre-step.js';
+export * from './skill-types.js';

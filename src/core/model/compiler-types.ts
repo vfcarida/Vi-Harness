@@ -204,6 +204,7 @@ export interface ContextCompilationRequest {
   readonly lastCacheMetrics?: CacheMetrics;
   readonly deferBoundaryMarkers?: boolean;
   readonly compactionOptions?: Partial<MultiTierCompressorOptions>;
+  readonly frozenMemoryObjects?: ReadonlyArray<ContextObject>;
 }
 
 export interface ContextCompilationResult {

@@ -63,3 +63,6 @@ export type { AgentRuntime, AgentObserver } from './agent-runtime.js';
 // Evaluation & Benchmarks
 export type { HarnessAdapter, HarnessExecutionContext, HarnessExecutionResult } from './harness-adapter.js';
 export type { BenchmarkRunner, BenchmarkRunOptions } from './benchmark-runner.js';
+
+// Skills
+export type { SkillRegistry, SelfModification } from './skill-registry.js';

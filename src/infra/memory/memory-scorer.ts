@@ -81,8 +81,8 @@ export class MemoryScorer {
   }
 
   private static calculateKeywordSimilarity(content: string, query: string): number {
-    const contentTokens = new Set(content.toLowerCase().split(/\W+/).filter((t) => t.length > 2));
-    const queryTokens = query.toLowerCase().split(/\W+/).filter((t) => t.length > 2);
+    const contentTokens = new Set(content.toLowerCase().split(/[\W_]+/).filter((t) => t.length > 2));
+    const queryTokens = query.toLowerCase().split(/[\W_]+/).filter((t) => t.length > 2);
 
     if (queryTokens.length === 0) return 0.5;
 

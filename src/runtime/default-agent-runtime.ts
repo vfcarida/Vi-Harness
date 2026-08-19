@@ -40,6 +40,12 @@ import { HarnessError } from '../core/errors/base-error.js';
 import { ErrorCode, ErrorCategory } from '../core/errors/error-codes.js';
 import { TerminationReason } from '../core/model/termination.js';
 
+import type { MemoryStore } from '../core/interfaces/memory-store.js';
+import type { SkillRegistry, SelfModification } from '../core/interfaces/skill-registry.js';
+import { FrozenMemorySnapshot } from '../infra/memory/frozen-memory-snapshot.js';
+import { SkillExtractor } from '../infra/memory/skill-extractor.js';
+import { SkillCurator } from '../infra/memory/skill-curator.js';
+
 export interface DefaultAgentRuntimeOptions {
   readonly router: ModelRouter;
   readonly compiler: ContextCompiler;
@@ -48,6 +54,10 @@ export interface DefaultAgentRuntimeOptions {
   readonly verificationEngine?: VerificationEngine;
   readonly evidenceStore?: EvidenceStore;
   readonly checkpointStore?: CheckpointStore;
+  readonly memoryStore?: MemoryStore;
+  readonly skillRegistry?: SkillRegistry;
+  readonly skillExtractor?: SkillExtractor;
+  readonly skillCurator?: SkillCurator;
   readonly idFactory: IdFactory;
   readonly clock: Clock;
 }
@@ -75,6 +85,10 @@ export class DefaultAgentRuntime implements AgentRuntime {
   private readonly verificationEngine?: VerificationEngine;
   private readonly evidenceStore?: EvidenceStore;
   private readonly checkpointStore?: CheckpointStore;
+  private readonly memoryStore?: MemoryStore;
+  private readonly skillRegistry?: SkillRegistry;
+  private readonly skillExtractor?: SkillExtractor;
+  private readonly skillCurator?: SkillCurator;
   private readonly idFactory: IdFactory;
   private readonly clock: Clock;
 
@@ -89,6 +103,10 @@ export class DefaultAgentRuntime implements AgentRuntime {
     this.verificationEngine = options.verificationEngine;
     this.evidenceStore = options.evidenceStore;
     this.checkpointStore = options.checkpointStore;
+    this.memoryStore = options.memoryStore;
+    this.skillRegistry = options.skillRegistry;
+    this.skillExtractor = options.skillExtractor;
+    this.skillCurator = options.skillCurator;
     this.idFactory = options.idFactory;
     this.clock = options.clock;
   }
@@ -142,7 +160,72 @@ export class DefaultAgentRuntime implements AgentRuntime {
       data: { goalId: goal.id, description: goal.description },
     });
 
-    return this.runLoop(execution, options);
+    // Capture frozen memory snapshot ONCE at execution start (Hermes)
+    let frozenMemoryObjects = options?.frozenMemoryObjects;
+    if (!frozenMemoryObjects && this.memoryStore && options?.useFrozenMemorySnapshot !== false) {
+      try {
+        const snapshotManager = new FrozenMemorySnapshot({
+          memoryStore: this.memoryStore,
+          idFactory: this.idFactory,
+          clock: this.clock,
+        });
+        frozenMemoryObjects = await snapshotManager.capture({
+          taskDescription: task.description,
+          goalDescription: goal.description,
+        });
+      } catch {
+        // Fallback gracefully
+      }
+    }
+
+    const skillRegistry = options?.skillRegistry ?? this.skillRegistry;
+    const selfModification =
+      options?.selfModification ??
+      (skillRegistry && 'mountSkill' in skillRegistry
+        ? (skillRegistry as unknown as SelfModification)
+        : undefined);
+
+    const mergedOptions: ExecutionOptions = {
+      ...options,
+      frozenMemoryObjects,
+      skillRegistry,
+      selfModification,
+    };
+
+    const result = await this.runLoop(execution, mergedOptions);
+
+    // Background self-improvement: extract learned pattern skills on completion (Hermes)
+    if (result.success && result.status === 'COMPLETED') {
+      const extractor =
+        this.skillExtractor ??
+        (this.memoryStore
+          ? new SkillExtractor({
+              memoryStore: this.memoryStore,
+              idFactory: this.idFactory,
+              clock: this.clock,
+            })
+          : undefined);
+
+      if (extractor) {
+        try {
+          const extracted = await extractor.extractFromExecution(result, task.description, goal.description);
+          // console.log('Extracted skill record:', extracted);
+        } catch (err) {
+          console.error('Skill extraction error:', err);
+        }
+      }
+
+      if (this.skillCurator) {
+        try {
+          await this.skillCurator.advanceIterationCounter(result.iterationCount);
+          await this.skillCurator.curate();
+        } catch {
+          // Curator is best-effort background work
+        }
+      }
+    }
+
+    return result;
   }
 
   async pause(executionId: ExecutionId): Promise<void> {

@@ -236,4 +236,16 @@ export type { DashboardState } from './tui/terminal-dashboard-renderer.js';
 export { TrajectoryDatasetExporter } from './telemetry/trajectory-dataset-exporter.js';
 export type { SftTrainingExample, DpoTrainingExample } from './telemetry/trajectory-dataset-exporter.js';
 
+// Frozen Memory Snapshot & Self-Improvement
+export { FrozenMemorySnapshot } from './memory/frozen-memory-snapshot.js';
+export type { FrozenMemorySnapshotOptions, CreateSnapshotParams } from './memory/frozen-memory-snapshot.js';
+export { SkillExtractor } from './memory/skill-extractor.js';
+export type { SkillExtractorOptions } from './memory/skill-extractor.js';
+export { SkillCurator } from './memory/skill-curator.js';
+export type { SkillCuratorOptions, CurationReport } from './memory/skill-curator.js';
+
+// Skills Catalog & Tools
+export { DefaultSkillRegistry } from './skills/default-skill-registry.js';
+export { createListSkillsTool, createLoadSkillTool } from './skills/skill-tools.js';
+
 

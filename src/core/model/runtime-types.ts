@@ -171,6 +171,10 @@ export interface ExecutionOptions {
   readonly preStepInterceptors?: ReadonlyArray<PreStepListener | PreStepInterceptor>;
   readonly signal?: AbortSignal;
   readonly relevantObjects?: ReadonlyArray<ContextObject>;
+  readonly frozenMemoryObjects?: ReadonlyArray<ContextObject>;
+  readonly useFrozenMemorySnapshot?: boolean;
+  readonly skillRegistry?: import('../interfaces/skill-registry.js').SkillRegistry;
+  readonly selfModification?: import('../interfaces/skill-registry.js').SelfModification;
   readonly preserveUserChanges?: boolean; // Default true (two-phase commit)
   readonly autoLintAfterWrite?: boolean;
   readonly autoTestAfterWrite?: boolean;
