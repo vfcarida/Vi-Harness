@@ -25,7 +25,7 @@ export function assertModelHistoryReconstructable(
       code: ErrorCode.STATE_CORRUPTED,
       category: ErrorCategory.STATE,
       message: `Reconstructability invariant violated: message length mismatch. Derived ${derived.length} messages, but sending ${actualMessagesBeingSent.length} messages.`,
-      details: {
+      context: {
         derivedCount: derived.length,
         actualCount: actualMessagesBeingSent.length,
         logEventCount: sessionLog.length,
@@ -50,7 +50,7 @@ export function assertModelHistoryReconstructable(
         code: ErrorCode.STATE_CORRUPTED,
         category: ErrorCategory.STATE,
         message: `Reconstructability invariant violated at message[${i}]: content mismatch.`,
-        details: {
+        context: {
           derivedContent: d.content,
           actualContent: a.content,
         },

@@ -84,7 +84,6 @@ Usage:
   const toolExecutor = new DefaultToolExecutor({
     registry: toolRegistry,
     idFactory,
-    clock,
   });
 
   const server = new McpServer({

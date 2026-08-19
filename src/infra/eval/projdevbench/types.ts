@@ -5,7 +5,7 @@
  * Evaluates generative whole-project construction from specifications across 8 categories.
  */
 import type { Goal } from '../../../core/model/goal.js';
-import type { TokenUsage } from '../../../core/model/token-usage.js';
+import type { TokenUsage } from '../../../core/model/model-io.js';
 
 export type ProjDevCategory =
   | 'CLI_TOOL'

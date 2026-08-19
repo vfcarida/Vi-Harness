@@ -16,7 +16,7 @@ import { TBENCH_KNOWN_LEADERBOARD } from './types.js';
 import { TBenchTaskLoader } from './task-loader.js';
 import { DefaultDockerEnvironment, MockDockerEnvironment } from './docker-env.js';
 import { ViHarnessHarborAgent } from './harbor-agent.js';
-import type { AgentRuntime } from '../../../core/interfaces/runtime.js';
+import type { AgentRuntime } from '../../../core/interfaces/agent-runtime.js';
 import type { IdFactory } from '../../../core/types/identifiers.js';
 import type { Clock } from '../../../core/interfaces/clock.js';
 

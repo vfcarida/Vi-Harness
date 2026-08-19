@@ -35,7 +35,7 @@ import { OpenAICompatibleProvider } from '../infra/model/openai-compatible-provi
 import { MockModelProvider } from '../infra/model/mock-model-provider.js';
 import { UuidV7IdFactory } from '../infra/id/uuid-id-factory.js';
 import { SystemClock } from '../infra/time/system-clock.js';
-import type { ModelRouter } from '../core/interfaces/model-router.js';
+import { UtilityModelRouter } from '../infra/router/utility-model-router.js';
 import { ProviderHealthStatus, ModelRole } from '../core/index.js';
 
 interface CliArgs {
@@ -104,12 +104,12 @@ Options:
 `);
 }
 
-async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+async function main(rawArgs: string[] = process.argv.slice(2)): Promise<void> {
+  const args = parseArgs(rawArgs);
 
   if (args.help) {
     printHelp();
-    process.exit(0);
+    return;
   }
 
   console.log('\n======================================================================');
@@ -139,30 +139,18 @@ async function main(): Promise<void> {
   // 2. Setup Provider & Router
   const provider =
     args.providerId === 'mock'
-      ? new MockModelProvider({ modelId: args.modelId, providerId: 'mock' })
+      ? new MockModelProvider({ descriptor: { id: args.modelId }, providerId: 'mock' })
       : new OpenAICompatibleProvider({
           apiKey: process.env['OPENAI_API_KEY'] ?? 'dummy-key',
-          modelId: args.modelId,
+          defaultModelId: args.modelId,
           providerId: args.providerId,
         });
 
-  const router: ModelRouter = {
-    route: async () => ({
-      selectedProvider: provider,
-      selectedModelId: args.modelId,
-      scores: [],
-      rationale: 'ProjDevBench Evaluation Route',
-      decidedAt: clock.now(),
-      deterministic: true,
-    }),
-    listAvailableModels: () => [],
-    getProviderHealth: () => ProviderHealthStatus.HEALTHY,
-    updateMetrics: () => {},
-    hasCapability: () => true,
-  };
+  const router = new UtilityModelRouter();
+  router.registerProvider(provider);
 
   const toolRegistry = new DefaultToolRegistry();
-  const toolExecutor = new DefaultToolExecutor({ registry: toolRegistry, idFactory, clock });
+  const toolExecutor = new DefaultToolExecutor({ registry: toolRegistry, idFactory });
   const compiler = new DefaultContextCompiler({ idFactory, clock });
 
   const runtime = new DefaultAgentRuntime({
@@ -212,6 +200,8 @@ async function main(): Promise<void> {
   console.log(`📄 Markdown Report saved to: ${mdPath}`);
   console.log('======================================================================\n');
 }
+
+export { main as runProjDevBenchCli };
 
 if (process.argv[1]?.endsWith('projdevbench-eval.ts') || process.argv[1]?.endsWith('projdevbench-eval.js')) {
   main().catch((err) => {

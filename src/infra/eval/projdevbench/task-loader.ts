@@ -11,9 +11,8 @@ import type {
   ProjDevDifficulty,
   ProjDevMode,
 } from './types.js';
-import type { Goal } from '../../../core/model/goal.js';
+import { type Goal, GoalStatus, DEFAULT_GOAL_CONSTRAINTS } from '../../../core/model/goal.js';
 import type { IdFactory } from '../../../core/types/identifiers.js';
-import { DEFAULT_GOAL_CONSTRAINTS } from '../../../core/model/goal.js';
 
 export interface ProjDevFilterOptions {
   readonly categories?: ReadonlyArray<ProjDevCategory>;
@@ -152,14 +151,23 @@ export class ProjDevTaskLoader {
    */
   static mapProblemToGoal(problem: ProjDevProblem, idFactory: IdFactory): Goal {
     const goalDescription = `[ProjDevBench:${problem.category}] ${problem.title}\n\n${problem.specMarkdown}`;
+    const now = new Date();
 
     return {
       id: idFactory.create<'Goal'>(),
       description: goalDescription,
+      status: GoalStatus.ACTIVE,
+      createdAt: now,
+      updatedAt: now,
       constraints: {
         ...DEFAULT_GOAL_CONSTRAINTS,
         maxCostDollars: problem.maxCostDollars ?? 2.0,
         maxIterations: 25,
+      },
+      metadata: {
+        benchmark: 'ProjDevBench',
+        problemId: problem.id,
+        category: problem.category,
       },
     };
   }

@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { TBenchTask, TBenchCategory, TBenchDifficulty, FilterOpts } from './types.js';
 import type { Goal } from '../../../core/model/goal.js';
-import { GoalStatus } from '../../../core/model/goal.js';
+import { GoalStatus, DEFAULT_GOAL_CONSTRAINTS } from '../../../core/model/goal.js';
 import type { IdFactory } from '../../../core/types/identifiers.js';
 
 export class TBenchTaskLoader {
@@ -148,20 +148,21 @@ export class TBenchTaskLoader {
    */
   static mapTaskToGoal(task: TBenchTask, idFactory: IdFactory): Goal {
     const goalId = idFactory.create<'Goal'>();
+    const now = new Date();
 
     return {
       id: goalId,
       description: `[TBench:${task.category.toUpperCase()}:${task.difficulty.toUpperCase()}] ${task.id}: ${task.instruction}`,
       status: GoalStatus.ACTIVE,
-      successCriteria: [
-        `Execute terminal commands in the container environment to satisfy instruction.`,
-        `Pass automated verification script: test.sh`,
-      ],
+      createdAt: now,
+      updatedAt: now,
       constraints: {
-        maxRounds: 30,
+        ...DEFAULT_GOAL_CONSTRAINTS,
+        maxIterations: 30,
         maxCostDollars: 2.0,
+        maxDurationMs: task.timeout * 1000,
         deadlineMs: task.timeout * 1000,
-        forbiddenActions: [],
+        requireVerification: false,
       },
       metadata: {
         benchmark: 'TBench',

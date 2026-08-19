@@ -42,7 +42,7 @@ export function reconstructGoalFromEvents(
 ): LifecycleGoal {
   if (!events || events.length === 0) {
     throw new HarnessError({
-      code: ErrorCode.STATE_CORRUPTION,
+      code: ErrorCode.STATE_CORRUPTED,
       category: ErrorCategory.STATE,
       message: 'Cannot reconstruct goal from empty event log',
     });
@@ -51,7 +51,7 @@ export function reconstructGoalFromEvents(
   const firstEvent = events[0]!;
   if (firstEvent.mutation.kind !== 'create') {
     throw new HarnessError({
-      code: ErrorCode.STATE_CORRUPTION,
+      code: ErrorCode.STATE_CORRUPTED,
       category: ErrorCategory.STATE,
       message: `First event must be 'create', got '${firstEvent.mutation.kind}'`,
     });
@@ -59,7 +59,7 @@ export function reconstructGoalFromEvents(
 
   if (firstEvent.goal.revision !== 1) {
     throw new HarnessError({
-      code: ErrorCode.STATE_CORRUPTION,
+      code: ErrorCode.STATE_CORRUPTED,
       category: ErrorCategory.STATE,
       message: `Initial goal revision must be 1, got ${firstEvent.goal.revision}`,
     });
@@ -74,7 +74,7 @@ export function reconstructGoalFromEvents(
     // Validate ID consistency
     if (nextGoal.id !== currentGoal.id) {
       throw new HarnessError({
-        code: ErrorCode.STATE_CORRUPTION,
+        code: ErrorCode.STATE_CORRUPTED,
         category: ErrorCategory.STATE,
         message: `Goal ID mismatch in event log at index ${i}: expected ${currentGoal.id}, got ${nextGoal.id}`,
       });
@@ -83,7 +83,7 @@ export function reconstructGoalFromEvents(
     // Validate monotonic revision
     if (nextGoal.revision !== currentGoal.revision + 1) {
       throw new HarnessError({
-        code: ErrorCode.STATE_CORRUPTION,
+        code: ErrorCode.STATE_CORRUPTED,
         category: ErrorCategory.STATE,
         message: `Non-monotonic goal revision at index ${i}: expected ${currentGoal.revision + 1}, got ${nextGoal.revision}`,
       });
@@ -103,7 +103,7 @@ export function reconstructGoalFromEvents(
     // Validate non-decreasing usage
     if (nextGoal.tokensUsed < currentGoal.tokensUsed || nextGoal.costUsed < currentGoal.costUsed) {
       throw new HarnessError({
-        code: ErrorCode.STATE_CORRUPTION,
+        code: ErrorCode.STATE_CORRUPTED,
         category: ErrorCategory.STATE,
         message: `Decreasing token or cost usage detected in event log at index ${i}`,
       });

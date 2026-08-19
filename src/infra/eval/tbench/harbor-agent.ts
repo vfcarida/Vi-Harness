@@ -11,7 +11,7 @@ import { TBenchTaskLoader } from './task-loader.js';
 import { TerminalTool } from '../../tools/terminal-tool.js';
 import { DefaultToolRegistry } from '../../tools/default-tool-registry.js';
 import { DefaultToolExecutor } from '../../tools/default-tool-executor.js';
-import type { AgentRuntime } from '../../../core/interfaces/runtime.js';
+import type { AgentRuntime } from '../../../core/interfaces/agent-runtime.js';
 import type { IdFactory } from '../../../core/types/identifiers.js';
 import type { Clock } from '../../../core/interfaces/clock.js';
 import type { ExecutionOptions } from '../../../core/model/runtime-types.js';
@@ -99,7 +99,6 @@ export class ViHarnessHarborAgent {
     const toolExecutor = new DefaultToolExecutor({
       registry,
       idFactory: this.idFactory,
-      clock: this.clock,
     });
 
     const executionOptions: ExecutionOptions = {

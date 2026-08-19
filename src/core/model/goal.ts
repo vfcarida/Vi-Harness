@@ -32,6 +32,12 @@ export interface GoalConstraints {
   /** Maximum wall-clock duration in milliseconds. */
   readonly maxDurationMs: number;
 
+  /**
+   * Absolute deadline expressed as a duration in milliseconds from goal creation.
+   * Semantically equivalent to `maxDurationMs` but named to align with TBench task timeout field.
+   */
+  readonly deadlineMs?: number;
+
   /** Maximum consecutive repair attempts before escalating. */
   readonly maxRepairAttempts: number;
 

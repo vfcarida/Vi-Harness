@@ -14,6 +14,7 @@ export enum ToolCategory {
   READ = 'READ',
   WRITE = 'WRITE',
   EXECUTE = 'EXECUTE',
+  COMMAND = 'COMMAND',
   DESTRUCTIVE = 'DESTRUCTIVE',
 }
 

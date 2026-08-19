@@ -5,7 +5,7 @@
  * Dedicated JSON-RPC 2.0 automation protocol for headless CI, script control,
  * and multi-agent orchestration.
  */
-import type { SessionEvent } from '../../core/model/session-types.js';
+import type { SessionEvent } from '../../core/session/session-event.js';
 
 export interface AcpNewSessionParams {
   readonly provider?: string;

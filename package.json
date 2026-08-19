@@ -1,15 +1,60 @@
 {
   "name": "vi-harness",
   "version": "0.1.0",
-  "description": "Enterprise-grade, model-agnostic coding-agent harness",
+  "description": "The world's best coding agent harness - synthesizing patterns from Claude Code, Aider, Prime Agent, Hermes, Pi, and Meta-Harness",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "vi-harness": "./dist/cli/index.js",
+    "vih": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./runtime": {
+      "import": "./dist/runtime/index.js",
+      "types": "./dist/runtime/index.d.ts"
+    },
+    "./tools": {
+      "import": "./dist/infra/tools/index.js",
+      "types": "./dist/infra/tools/index.d.ts"
+    },
+    "./mcp": {
+      "import": "./dist/infra/mcp/index.js",
+      "types": "./dist/infra/mcp/index.d.ts"
+    },
+    "./storage": {
+      "import": "./dist/infra/storage/index.js",
+      "types": "./dist/infra/storage/index.d.ts"
+    }
+  },
   "files": [
-    "dist"
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "harness",
+    "mcp",
+    "llm",
+    "developer-tools"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vi-harness/vi-harness"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json && tsx scripts/post-build.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
@@ -20,6 +65,11 @@
     "lint": "eslint src/ tests/",
     "benchmark": "tsx src/cli/benchmark-cli.ts",
     "benchmark:context": "tsx src/cli/context-benchmark-cli.ts",
+    "bench:tbench": "tsx src/cli/tbench-eval.ts",
+    "bench:projdevbench": "tsx src/cli/projdevbench-eval.ts",
+    "release": "tsx scripts/release.ts",
+    "prepublish-check": "tsx scripts/prepublish-check.ts",
+    "prepublishOnly": "npm run prepublish-check",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "clean": "node -e \"const fs=require('fs');fs.rmSync('dist',{recursive:true,force:true})\""
@@ -40,9 +90,5 @@
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0",
     "vitest": "^3.0.0"
-  },
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "license": "MIT"
+  }
 }

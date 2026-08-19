@@ -10,9 +10,10 @@ import type { ProjDevProblem, ProjDevProblemScore } from './types.js';
 import type { ProjDevIsolatedWorkspace } from './workspace-manager.js';
 import { ProjDevTaskLoader } from './task-loader.js';
 import { ProjDevEvaluator } from './evaluator.js';
-import type { AgentRuntime } from '../../../core/interfaces/runtime.js';
+import type { AgentRuntime } from '../../../core/interfaces/agent-runtime.js';
 import type { ExecutionOptions } from '../../../core/model/runtime-types.js';
 import type { Tool } from '../../../core/interfaces/tool.js';
+import { ToolCategory, ToolRiskLevel } from '../../../core/model/tool-types.js';
 import { DefaultToolRegistry } from '../../tools/default-tool-registry.js';
 import { DefaultToolExecutor } from '../../tools/default-tool-executor.js';
 import type { IdFactory } from '../../../core/types/identifiers.js';
@@ -48,8 +49,8 @@ export class ProjDevExecutionAdapter {
       const resolved = path.resolve(workspacePath, targetPath);
       if (!resolved.startsWith(workspacePath)) {
         throw new HarnessError({
-          code: ErrorCode.POLICY_VIOLATION,
-          category: ErrorCategory.SECURITY,
+          code: ErrorCode.POLICY_DENIED,
+          category: ErrorCategory.POLICY,
           message: `Path traversal violation: Access outside workspace is denied (${targetPath})`,
         });
       }
@@ -59,11 +60,14 @@ export class ProjDevExecutionAdapter {
     const readFileTool: Tool = {
       definition: {
         name: 'read_file',
+        version: '1.0.0',
         description: 'Read the contents of a file inside the project workspace.',
-        category: 'FILESYSTEM' as any,
-        riskLevel: 'LOW' as any,
+        category: ToolCategory.READ,
+        riskLevel: ToolRiskLevel.LOW,
         mutating: false,
         idempotent: true,
+        defaultTimeoutMs: 30000,
+        requiredPermissions: [],
         inputSchema: {
           type: 'object',
           properties: { path: { type: 'string' } },
@@ -89,11 +93,14 @@ export class ProjDevExecutionAdapter {
     const writeFileTool: Tool = {
       definition: {
         name: 'write_file',
+        version: '1.0.0',
         description: 'Write content to a file inside the project workspace.',
-        category: 'FILESYSTEM' as any,
-        riskLevel: 'MEDIUM' as any,
+        category: ToolCategory.WRITE,
+        riskLevel: ToolRiskLevel.MEDIUM,
         mutating: true,
         idempotent: false,
+        defaultTimeoutMs: 30000,
+        requiredPermissions: [],
         inputSchema: {
           type: 'object',
           properties: {
@@ -123,11 +130,14 @@ export class ProjDevExecutionAdapter {
     const listDirTool: Tool = {
       definition: {
         name: 'list_directory',
+        version: '1.0.0',
         description: 'List files and directories in the project workspace.',
-        category: 'FILESYSTEM' as any,
-        riskLevel: 'LOW' as any,
+        category: ToolCategory.READ,
+        riskLevel: ToolRiskLevel.LOW,
         mutating: false,
         idempotent: true,
+        defaultTimeoutMs: 30000,
+        requiredPermissions: [],
         inputSchema: {
           type: 'object',
           properties: { path: { type: 'string' } },
@@ -153,11 +163,14 @@ export class ProjDevExecutionAdapter {
     const runCommandTool: Tool = {
       definition: {
         name: 'run_command',
+        version: '1.0.0',
         description: 'Run a shell command inside the project workspace directory.',
-        category: 'COMMAND' as any,
-        riskLevel: 'MEDIUM' as any,
+        category: ToolCategory.EXECUTE,
+        riskLevel: ToolRiskLevel.MEDIUM,
         mutating: true,
         idempotent: false,
+        defaultTimeoutMs: 30000,
+        requiredPermissions: [],
         inputSchema: {
           type: 'object',
           properties: { command: { type: 'string' } },
@@ -178,7 +191,7 @@ export class ProjDevExecutionAdapter {
                   toolCallId: callId,
                   name: 'run_command',
                   success: false,
-                  output: `Exit Code ${error.code ?? 1}\nStdout: ${stdout}\nStderr: ${stderr}`,
+                  output: `Exit Code ${(error as any).code ?? 1}\nStdout: ${stdout}\nStderr: ${stderr}`,
                   durationMs: Date.now() - start,
                 });
               } else {
@@ -218,7 +231,6 @@ export class ProjDevExecutionAdapter {
     const toolExecutor = new DefaultToolExecutor({
       registry,
       idFactory: this.idFactory,
-      clock: this.clock,
     });
 
     const runtimeOptions: ExecutionOptions = {

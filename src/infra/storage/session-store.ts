@@ -6,8 +6,9 @@
  */
 import type { SqliteStore } from './sqlite-store.js';
 import { DefaultSession } from '../../core/session/session.js';
-import type { Session, SessionHeader } from '../../core/session/session.js';
-import type { SessionEvent } from '../../core/model/session-types.js';
+import type { Session } from '../../core/session/session.js';
+import type { SessionHeader } from '../../core/session/session-header.js';
+import type { SessionEvent } from '../../core/session/session-event.js';
 import type { SessionId } from '../../core/types/identifiers.js';
 import type { IdFactory } from '../../core/types/identifiers.js';
 import type { Clock } from '../../core/interfaces/clock.js';
@@ -149,6 +150,7 @@ export class SqliteSessionStore {
 
     const header: SessionHeader = {
       id: sessionRow.id as SessionId,
+      version: 1,
       parentId: (sessionRow.parent_id as SessionId) ?? undefined,
       branchPoint: sessionRow.branch_point ?? undefined,
       createdAt: sessionRow.created_at,
@@ -172,7 +174,7 @@ export class SqliteSessionStore {
     branchPoint: number,
     childSessionId?: string,
     metadata: Record<string, unknown> = {},
-  ): Promise<DefaultSession> {
+  ): Promise<Session> {
     const parent = await this.loadSession(parentSessionId);
     if (!parent) {
       throw new Error(`Cannot branch from non-existent parent session: ${parentSessionId}`);
@@ -193,7 +195,7 @@ export class SqliteSessionStore {
   /**
    * Resume an existing session.
    */
-  async resumeSession(sessionId: string): Promise<DefaultSession> {
+  async resumeSession(sessionId: string): Promise<Session> {
     const record = await this.loadSession(sessionId);
     if (!record) {
       throw new Error(`Session not found for resume: ${sessionId}`);

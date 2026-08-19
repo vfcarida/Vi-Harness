@@ -20,10 +20,10 @@ import type {
   ModelResponse,
   ModelMessage,
   TokenUsage,
-  ToolDefinition,
 } from '../core/model/model-io.js';
-import { MessageRole, FinishReason } from '../core/model/model-io.js';
-import type { DualModelConfig, ModelRole } from '../core/model/router-types.js';
+import type { ToolDefinition } from '../core/model/tool-types.js';
+import { MessageRole } from '../core/model/model-io.js';
+import type { DualModelConfig } from '../core/model/router-types.js';
 import { TaskCategory } from '../core/model/router-types.js';
 import { AgentPhase } from '../core/model/state.js';
 import type { Goal } from '../core/model/goal.js';

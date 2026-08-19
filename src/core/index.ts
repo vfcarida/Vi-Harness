@@ -25,3 +25,6 @@ export * from './goal/index.js';
 
 // Event-sourced tree sessions
 export * from './session/index.js';
+
+// Profile system
+export * from './profile/index.js';

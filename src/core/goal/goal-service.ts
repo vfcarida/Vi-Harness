@@ -129,7 +129,7 @@ export class GoalService {
     const current = this.goals.get(ref.id);
     if (!current) {
       throw new HarnessError({
-        code: ErrorCode.STATE_CORRUPTION,
+        code: ErrorCode.STATE_CORRUPTED,
         category: ErrorCategory.STATE,
         message: `Goal with ID [${ref.id}] not found`,
       });
@@ -137,7 +137,7 @@ export class GoalService {
 
     if (current.revision !== ref.revision) {
       throw new HarnessError({
-        code: ErrorCode.STATE_CORRUPTION,
+        code: ErrorCode.STATE_CORRUPTED,
         category: ErrorCategory.STATE,
         message: `Stale GoalRef: expected revision ${current.revision}, got ${ref.revision}`,
       });
@@ -205,8 +205,8 @@ export class GoalService {
     // Reject resume if rounds are exhausted
     if (current.roundsStarted >= current.maxRounds) {
       throw new HarnessError({
-        code: ErrorCode.RESOURCE_BUDGET_EXCEEDED,
-        category: ErrorCategory.RESOURCE,
+        code: ErrorCode.POLICY_DENIED,
+        category: ErrorCategory.POLICY,
         message: `Cannot resume goal: round budget exhausted (${current.roundsStarted}/${current.maxRounds} rounds)`,
       });
     }
@@ -214,8 +214,8 @@ export class GoalService {
     // Reject resume if token budget is exhausted
     if (current.tokenBudget && current.tokensUsed >= current.tokenBudget) {
       throw new HarnessError({
-        code: ErrorCode.RESOURCE_BUDGET_EXCEEDED,
-        category: ErrorCategory.RESOURCE,
+        code: ErrorCode.POLICY_DENIED,
+        category: ErrorCategory.POLICY,
         message: `Cannot resume goal: token budget exhausted (${current.tokensUsed}/${current.tokenBudget} tokens)`,
       });
     }

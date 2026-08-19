@@ -48,7 +48,7 @@ import type { Evidence } from '../core/model/evidence.js';
 import { EvidenceType, EvidenceOutcome } from '../core/model/evidence.js';
 import type { ActionResult, ActionProposal } from '../core/model/action.js';
 import { ActionResultStatus, ActionType } from '../core/model/action.js';
-import type { ModelRequest, ModelMessage } from '../core/model/model-io.js';
+import type { ModelRequest, ModelResponse, ModelMessage } from '../core/model/model-io.js';
 import { MessageRole, FinishReason } from '../core/model/model-io.js';
 import { PolicyDecisionType } from '../core/model/policy.js';
 import type { Iteration } from '../core/model/iteration.js';
@@ -1122,7 +1122,7 @@ async function executeSingleProposalWithPolicy(
     };
     const evaluation = await params.policyEngine.evaluate(action);
     policyDecisions.push({
-      proposalId: proposal.id,
+      actionId: proposal.id as any,
       toolName: tool.definition.name,
       decision: evaluation.decision,
       ruleId: evaluation.ruleId,

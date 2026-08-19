@@ -376,8 +376,6 @@ export type {
   SqliteSessionStoreOptions,
   ExperienceRecord,
   SqliteExperienceStoreOptions,
-  MemoryScope,
-  MemoryStatus,
   MemoryEntry,
   SqliteMemoryCuratorOptions,
   MetricRecord,
@@ -385,4 +383,10 @@ export type {
   SqliteMetricsSinkOptions,
 } from './storage/index.js';
 
-
+// Profile System (DSH Reference)
+export {
+  ProfileLoader,
+  ProfileManager,
+  BUILTIN_PROFILES,
+  KNOWN_BUNDLES,
+} from './profile/index.js';

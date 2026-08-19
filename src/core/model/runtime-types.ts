@@ -26,7 +26,7 @@ import type { PreStepListener, PreStepInterceptor } from './pre-step.js';
 // ---------------------------------------------------------------------------
 
 export interface PolicyDecisionRecord {
-  readonly actionId: ActionId;
+  readonly actionId: string;
   readonly toolName: string;
   readonly decision: PolicyDecisionType;
   readonly ruleId?: string;

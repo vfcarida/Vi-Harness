@@ -165,7 +165,7 @@ export class DefaultExperienceStore implements ExperienceStore {
         traceId: `${params.runId}-iter-${it.sequenceNumber || idx + 1}`,
         executionId: params.runId as any,
         taskId: (params.taskId ?? 'task-1') as any,
-        iterationId: (it.id ?? `iter-${idx + 1}`) as any,
+        iterationId: ((it as any).id ?? `iter-${idx + 1}`) as any,
         sequenceNumber: it.sequenceNumber || idx + 1,
         phaseBefore: it.stateBefore,
         phaseAfter: it.stateAfter,
@@ -186,8 +186,8 @@ export class DefaultExperienceStore implements ExperienceStore {
         policyDecisions: [],
         executedToolResults: it.toolResults ?? [],
         evidenceCreated: it.evidenceCreated ?? [],
-        durationMs: it.durationMs ?? 0,
-        timestamp: it.timestamp ?? now,
+        durationMs: (it as any).durationMs ?? 0,
+        timestamp: (it as any).timestamp ?? now,
       }));
     }
 

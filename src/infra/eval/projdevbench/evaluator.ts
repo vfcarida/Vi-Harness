@@ -17,7 +17,7 @@ import type {
   LeaderboardEntry,
 } from './types.js';
 import { PROJDEVBENCH_KNOWN_LEADERBOARD } from './types.js';
-import type { TokenUsage } from '../../../core/model/token-usage.js';
+import type { TokenUsage } from '../../../core/model/model-io.js';
 
 export interface EvaluatorOptions {
   readonly testTimeoutMs?: number;

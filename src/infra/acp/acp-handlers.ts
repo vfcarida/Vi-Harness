@@ -19,15 +19,15 @@ import type {
   AcpAgentIdleResult,
   AcpAgentStatus,
 } from './acp-types.js';
-import type { AgentRuntime } from '../../core/interfaces/runtime.js';
+import type { AgentRuntime } from '../../core/interfaces/agent-runtime.js';
 import type { IdFactory } from '../../core/types/identifiers.js';
 import type { Clock } from '../../core/interfaces/clock.js';
 import { DefaultSession } from '../../core/session/session.js';
-import type { SessionStore } from '../../core/interfaces/session-store.js';
+import type { SqliteSessionStore } from '../storage/session-store.js';
 import type { Goal } from '../../core/model/goal.js';
-import { GoalStatus } from '../../core/model/goal.js';
+import { GoalStatus, DEFAULT_GOAL_CONSTRAINTS } from '../../core/model/goal.js';
 import type { ExecutionId, SessionId } from '../../core/types/identifiers.js';
-import type { SessionEvent } from '../../core/model/session-types.js';
+import type { SessionEvent } from '../../core/session/session-event.js';
 
 interface AcpSessionRecord {
   readonly sessionId: string;
@@ -46,21 +46,21 @@ export interface AcpHandlerOptions {
   readonly runtime: AgentRuntime;
   readonly idFactory: IdFactory;
   readonly clock: Clock;
-  readonly sessionStore?: SessionStore;
+  readonly sessionStore?: SqliteSessionStore;
 }
 
 export class AcpHandlers {
   private readonly runtime: AgentRuntime;
   private readonly idFactory: IdFactory;
   private readonly clock: Clock;
-  private readonly sessionStore?: SessionStore;
+  private readonly sessionStore?: SqliteSessionStore;
   private readonly sessions = new Map<string, AcpSessionRecord>();
 
   constructor(options: AcpHandlerOptions) {
     this.runtime = options.runtime;
     this.idFactory = options.idFactory;
     this.clock = options.clock;
-    this.sessionStore = options.sessionStore;
+    this.sessionStore = options.sessionStore as SqliteSessionStore;
   }
 
   async handleNewSession(params?: AcpNewSessionParams): Promise<AcpNewSessionResult> {
@@ -68,6 +68,7 @@ export class AcpHandlers {
     const session = new DefaultSession({
       header: {
         id: sessionId,
+        version: 1,
         createdAt: this.clock.now().getTime(),
       },
       idFactory: this.idFactory,
@@ -87,12 +88,15 @@ export class AcpHandlers {
     this.sessions.set(sessionId, record);
 
     if (params?.goalDescription) {
+      const now = new Date();
       record.goal = {
         id: this.idFactory.create<'Goal'>(),
         description: params.goalDescription,
         status: GoalStatus.ACTIVE,
-        successCriteria: ['Complete user objective'],
-        constraints: { maxRounds: 25, maxCostDollars: 2.0, forbiddenActions: [] },
+        createdAt: now,
+        updatedAt: now,
+        constraints: { ...DEFAULT_GOAL_CONSTRAINTS, maxIterations: 25, requireVerification: false },
+        metadata: {},
       };
     }
 
@@ -112,12 +116,15 @@ export class AcpHandlers {
 
     // Prepare Goal
     if (!record.goal) {
+      const now = new Date();
       record.goal = {
         id: this.idFactory.create<'Goal'>(),
         description: params.message,
         status: GoalStatus.ACTIVE,
-        successCriteria: ['Complete user objective'],
-        constraints: { maxRounds: 25, maxCostDollars: 2.0, forbiddenActions: [] },
+        createdAt: now,
+        updatedAt: now,
+        constraints: { ...DEFAULT_GOAL_CONSTRAINTS, maxIterations: 25, requireVerification: false },
+        metadata: {},
       };
     }
 
@@ -178,7 +185,7 @@ export class AcpHandlers {
 
     if (record.activeExecutionId && record.status === 'RUNNING') {
       try {
-        await this.runtime.cancel(record.activeExecutionId, params.reason ?? 'Cancelled via ACP');
+        await (this.runtime as any).cancel?.(record.activeExecutionId, params.reason ?? 'Cancelled via ACP');
       } catch {
         // Ignore cancellation error
       }

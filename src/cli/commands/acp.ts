@@ -18,7 +18,7 @@ import { OpenAICompatibleProvider } from '../../infra/model/openai-compatible-pr
 import { MockModelProvider } from '../../infra/model/mock-model-provider.js';
 import { UuidV7IdFactory } from '../../infra/id/uuid-id-factory.js';
 import { SystemClock } from '../../infra/time/system-clock.js';
-import type { ModelRouter } from '../../core/interfaces/model-router.js';
+import { UtilityModelRouter } from '../../infra/router/utility-model-router.js';
 import { ProviderHealthStatus } from '../../core/index.js';
 
 export interface AcpCliArgs {
@@ -83,30 +83,18 @@ Usage:
 
   const provider =
     args.providerId === 'mock'
-      ? new MockModelProvider({ modelId: args.modelId, providerId: 'mock' })
+      ? new MockModelProvider({ descriptor: { id: args.modelId }, providerId: 'mock' })
       : new OpenAICompatibleProvider({
           apiKey: process.env['OPENAI_API_KEY'] ?? 'dummy-key',
-          modelId: args.modelId,
+          defaultModelId: args.modelId,
           providerId: args.providerId,
         });
 
-  const router: ModelRouter = {
-    route: async () => ({
-      selectedProvider: provider,
-      selectedModelId: args.modelId,
-      scores: [],
-      rationale: 'ACP Automation Route',
-      decidedAt: clock.now(),
-      deterministic: true,
-    }),
-    listAvailableModels: () => [],
-    getProviderHealth: () => ProviderHealthStatus.HEALTHY,
-    updateMetrics: () => {},
-    hasCapability: () => true,
-  };
+  const router = new UtilityModelRouter();
+  router.registerProvider(provider);
 
   const toolRegistry = new DefaultToolRegistry();
-  const toolExecutor = new DefaultToolExecutor({ registry: toolRegistry, idFactory, clock });
+  const toolExecutor = new DefaultToolExecutor({ registry: toolRegistry, idFactory });
   const compiler = new DefaultContextCompiler({ idFactory, clock });
 
   const runtime = new DefaultAgentRuntime({
