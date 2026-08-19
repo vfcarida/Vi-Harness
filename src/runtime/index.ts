@@ -11,3 +11,16 @@ export { DefaultAgentRuntime } from './default-agent-runtime.js';
 export type { DefaultAgentRuntimeOptions } from './default-agent-runtime.js';
 export { LoopFingerprinter } from './loop-fingerprinter.js';
 export type { LoopStateSnapshot, LoopAnomalyDetection, LoopAnomalyType } from './loop-fingerprinter.js';
+export { PreStepPipeline } from './pre-step-pipeline.js';
+export {
+  ArchitectExecutor,
+  ARCHITECT_SYSTEM_PROMPT,
+  EDITOR_SYSTEM_PROMPT,
+  type ArchitectPlanParams,
+  type ArchitectPlanResult,
+  type ArchitectExecuteParams,
+  type ArchitectExecuteResult,
+  type ArchitectPlanAndExecuteParams,
+  type ArchitectExecutionResult,
+  type ArchitectPreStepState,
+} from './architect-executor.js';

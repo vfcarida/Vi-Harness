@@ -19,13 +19,14 @@ import type { TerminationDecision } from './termination.js';
 import type { TaskCategory, RiskLevel, ComplexityLevel, ModelRole, DualModelConfig } from './router-types.js';
 import type { ContextObject } from './context-object.js';
 import type { PolicyDecisionType } from './policy.js';
+import type { PreStepListener, PreStepInterceptor } from './pre-step.js';
 
 // ---------------------------------------------------------------------------
-// Iteration Phase Breakdown
+// Iteration Phases (ADR-007)
 // ---------------------------------------------------------------------------
 
 export interface PolicyDecisionRecord {
-  readonly proposalId: string;
+  readonly actionId: ActionId;
   readonly toolName: string;
   readonly decision: PolicyDecisionType;
   readonly ruleId?: string;
@@ -48,6 +49,22 @@ export interface IterationPhases {
     readonly modelId: string;
     readonly usage: TokenUsage;
     readonly latencyMs: number;
+    readonly isArchitectMode?: boolean;
+    readonly architect?: {
+      readonly providerId: string;
+      readonly modelId: string;
+      readonly usage: TokenUsage;
+      readonly latencyMs: number;
+      readonly costDollars: number;
+      readonly plan?: string;
+    };
+    readonly editor?: {
+      readonly providerId: string;
+      readonly modelId: string;
+      readonly usage: TokenUsage;
+      readonly latencyMs: number;
+      readonly costDollars: number;
+    };
   };
   readonly actionProposals: ReadonlyArray<ActionProposal>;
   readonly policyDecisions: ReadonlyArray<PolicyDecisionRecord>;
@@ -87,6 +104,8 @@ export enum AgentEventType {
   IterationStarted = 'IterationStarted',
   ModelSelected = 'ModelSelected',
   ModelCalled = 'ModelCalled',
+  ArchitectPlanGenerated = 'ArchitectPlanGenerated',
+  EditorExecuted = 'EditorExecuted',
   ActionProposed = 'ActionProposed',
   PolicyEvaluated = 'PolicyEvaluated',
   ToolStarted = 'ToolStarted',
@@ -134,6 +153,7 @@ export interface IterationRecord {
   readonly terminationDecision: TerminationDecision;
   readonly phases?: IterationPhases;
   readonly iterationModel?: Iteration;
+  readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +167,8 @@ export interface ExecutionOptions {
   readonly complexity?: ComplexityLevel;
   readonly targetRole?: ModelRole;
   readonly dualModelConfig?: DualModelConfig;
+  readonly architectMode?: boolean;
+  readonly preStepInterceptors?: ReadonlyArray<PreStepListener | PreStepInterceptor>;
   readonly signal?: AbortSignal;
   readonly relevantObjects?: ReadonlyArray<ContextObject>;
   readonly preserveUserChanges?: boolean; // Default true (two-phase commit)

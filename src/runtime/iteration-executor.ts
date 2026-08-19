@@ -56,6 +56,8 @@ import { IterationOutcome } from '../core/model/iteration.js';
 import { ContextTier } from '../core/model/context.js';
 import type { ContextObject } from '../core/model/context-object.js';
 import { VerificationProfile, VerificationStatus, type VerificationResult } from '../core/model/verification.js';
+import { PreStepPipeline } from './pre-step-pipeline.js';
+import { ArchitectExecutor, type ArchitectExecutionResult } from './architect-executor.js';
 
 export interface IterationExecutorParams {
   readonly executionId: ExecutionId;
@@ -240,19 +242,104 @@ export class IterationExecutor {
     }
 
     // -----------------------------------------------------------------------
-    // PHASE 3: MODEL DECISION
+    // PHASE 3: MODEL DECISION (PRE-STEP WATERFALL & ARCHITECT/EDITOR DUAL-MODEL)
     // -----------------------------------------------------------------------
-    const modelRequest: ModelRequest = {
-      modelId: routingDecision.selectedModelId,
-      messages,
-      signal: options?.signal,
-    };
+    let stepMessages: ReadonlyArray<ModelMessage> = messages;
+    let isPreStepRejected = false;
+    let preStepRejectReason: string | undefined;
 
-    const modelResponse = await executeResiliently(
-      routingDecision.selectedProvider,
-      modelRequest,
-      { maxRetries: 2, defaultTimeoutMs: 15000 },
-    );
+    if (options?.preStepInterceptors && options.preStepInterceptors.length > 0) {
+      const preStepDecision = await PreStepPipeline.runWaterfall(options.preStepInterceptors, {
+        messages,
+        turn: sequenceNumber,
+        step: sequenceNumber,
+        signal: options.signal,
+        metadata: { taskId: task.id, goalId: goal.id, phase: currentState.phase },
+      });
+
+      if (preStepDecision.kind === 'reject') {
+        isPreStepRejected = true;
+        preStepRejectReason = preStepDecision.reason ?? 'Step rejected by pre-step interceptor';
+      } else {
+        stepMessages = preStepDecision.messages;
+      }
+    }
+
+    let modelResponse: ModelResponse;
+    let architectExecutionData: ArchitectExecutionResult | undefined;
+
+    const evidenceCreated: Evidence[] = [];
+
+    if (isPreStepRejected) {
+      modelResponse = {
+        requestId: idFactory.create<'Evidence'>(),
+        modelId: routingDecision.selectedModelId,
+        providerId: routingDecision.selectedProvider.providerId,
+        content: `[REJECTED] ${preStepRejectReason}`,
+        toolCalls: [],
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        finishReason: FinishReason.STOP,
+        latencyMs: 0,
+        estimatedCostDollars: 0,
+      };
+
+      const rejectEv: Evidence = {
+        id: idFactory.create<'Evidence'>(),
+        taskId: task.id,
+        type: EvidenceType.RUNTIME_OUTPUT,
+        outcome: EvidenceOutcome.FAIL,
+        summary: `PRE_STEP_REJECTED: ${preStepRejectReason}`,
+        data: { reason: preStepRejectReason },
+        createdAt: clock.now(),
+        pass: false,
+        confidence: 1.0,
+        affectedFiles: [],
+      };
+      evidenceCreated.push(rejectEv);
+      if (evidenceStore) {
+        await evidenceStore.record(rejectEv);
+      }
+      observerHub.emit({
+        type: AgentEventType.EvidenceCreated,
+        executionId,
+        taskId: task.id,
+        timestamp: clock.now(),
+        data: { evidence: rejectEv },
+      });
+    } else if (options?.architectMode) {
+      const toolDefs = params.toolExecutor?.listTools().map((t) => t.definition);
+      architectExecutionData = await ArchitectExecutor.executePlanAndExecute({
+        goal,
+        task,
+        messages: stepMessages,
+        router,
+        tools: toolDefs,
+        dualModelConfig,
+        signal: options?.signal,
+        executionId,
+        observerHub,
+        clock,
+        contextTokenCount,
+        remainingBudgetDollars: goal.constraints.maxCostDollars - totalCostDollars,
+        currentState: currentState.phase,
+      });
+
+      modelResponse = architectExecutionData.combinedResponse;
+    } else {
+      const toolDefs = params.toolExecutor?.listTools().map((t) => t.definition);
+      const modelRequest: ModelRequest = {
+        modelId: routingDecision.selectedModelId,
+        messages: stepMessages,
+        tools: toolDefs,
+        signal: options?.signal,
+      };
+
+      modelResponse = await executeResiliently(
+        routingDecision.selectedProvider,
+        modelRequest,
+        { maxRetries: 2, defaultTimeoutMs: 15000 },
+      );
+    }
 
     observerHub.emit({
       type: AgentEventType.ModelCalled,
@@ -262,6 +349,17 @@ export class IterationExecutor {
       data: {
         tokens: modelResponse.usage,
         latencyMs: modelResponse.latencyMs,
+        costDollars: modelResponse.estimatedCostDollars,
+        isArchitectMode: Boolean(options?.architectMode),
+        ...(architectExecutionData
+          ? {
+              architectCostDollars: architectExecutionData.architect.costDollars,
+              editorCostDollars: architectExecutionData.editor.costDollars,
+              architectTokens: architectExecutionData.architect.usage,
+              editorTokens: architectExecutionData.editor.usage,
+              plan: architectExecutionData.plan,
+            }
+          : {}),
       },
     });
 
@@ -347,7 +445,6 @@ export class IterationExecutor {
     // -----------------------------------------------------------------------
     // PHASE 7 & 8: OBSERVE RESULT, VERIFICATION & EVIDENCE RECORDING
     // -----------------------------------------------------------------------
-    const evidenceCreated: Evidence[] = [];
     const now = clock.now();
     const hasFailingTool = toolResults.some(
       (t) => t.status === ActionResultStatus.FAILURE || t.status === ActionResultStatus.DENIED,
@@ -842,6 +939,26 @@ export class IterationExecutor {
         modelId: routingDecision.selectedModelId,
         usage: modelResponse.usage,
         latencyMs: modelResponse.latencyMs,
+        isArchitectMode: Boolean(options?.architectMode),
+        architect: architectExecutionData
+          ? {
+              providerId: architectExecutionData.architect.providerId,
+              modelId: architectExecutionData.architect.modelId,
+              usage: architectExecutionData.architect.usage,
+              latencyMs: architectExecutionData.architect.latencyMs,
+              costDollars: architectExecutionData.architect.costDollars,
+              plan: architectExecutionData.plan,
+            }
+          : undefined,
+        editor: architectExecutionData
+          ? {
+              providerId: architectExecutionData.editor.providerId,
+              modelId: architectExecutionData.editor.modelId,
+              usage: architectExecutionData.editor.usage,
+              latencyMs: architectExecutionData.editor.latencyMs,
+              costDollars: architectExecutionData.editor.costDollars,
+            }
+          : undefined,
       },
       actionProposals,
       policyDecisions,
@@ -878,6 +995,18 @@ export class IterationExecutor {
       terminationDecision,
       phases,
       iterationModel: currentIterationModel,
+      metadata: {
+        ...(architectExecutionData
+          ? {
+              architectMode: true,
+              architectPlan: architectExecutionData.plan,
+              architectCostDollars: architectExecutionData.architect.costDollars,
+              editorCostDollars: architectExecutionData.editor.costDollars,
+              architectTokens: architectExecutionData.architect.usage,
+              editorTokens: architectExecutionData.editor.usage,
+            }
+          : {}),
+      },
     };
 
     observerHub.emit({
