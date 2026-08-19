@@ -1,0 +1,9 @@
+{
+  "id": "train-mnist-classifier",
+  "category": "machine-learning",
+  "difficulty": "medium",
+  "tags": ["ml", "classification", "python"],
+  "timeout": 600,
+  "instruction": "Configure and train model.js so that evaluateModel() returns an accuracy score >= 0.95.",
+  "testScript": "node -e \"const { evaluateModel } = require('./model.js'); const acc = evaluateModel(); if (acc < 0.95) process.exit(1);\""
+}

@@ -1,0 +1,9 @@
+{
+  "id": "inspect-pcap-traffic",
+  "category": "security",
+  "difficulty": "hard",
+  "tags": ["security", "networking", "wireshark", "pcap"],
+  "timeout": 900,
+  "instruction": "Inspect network traffic packet capture and write the extracted secret token to token.txt.",
+  "testScript": "node -e \"const fs = require('fs'); if (!fs.existsSync('token.txt') || fs.readFileSync('token.txt', 'utf-8').trim() !== 'SECRET_VI_HARNESS_KEY_99') process.exit(1);\""
+}

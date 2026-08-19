@@ -291,4 +291,35 @@ export type {
   ProjDevIsolatedWorkspace,
 } from './eval/projdevbench/index.js';
 
+// TBench (Terminal-Bench 2.0 / Harbor Framework)
+export {
+  TBenchTaskLoader,
+  DefaultDockerEnvironment,
+  MockDockerEnvironment,
+  ViHarnessHarborAgent,
+  TBenchRunner,
+  TBenchReportGenerator,
+  TBENCH_KNOWN_LEADERBOARD,
+} from './eval/tbench/index.js';
+export type {
+  TBenchCategory,
+  TBenchDifficulty,
+  TBenchTask,
+  FilterOpts as TBenchFilterOpts,
+  Container as TBenchContainer,
+  ExecResult as TBenchExecResult,
+  DockerEnvironmentOptions,
+  DockerEnvironment,
+  TBenchRunConfig,
+  TBenchTaskResult,
+  TBenchCategoryStat,
+  TBenchLeaderboardEntry,
+  TBenchResults,
+  TerminalConnection,
+  ViHarnessHarborAgentOptions,
+  TBenchRunnerOptions,
+} from './eval/tbench/index.js';
+export { TerminalTool } from './tools/terminal-tool.js';
+export type { TerminalToolOptions } from './tools/terminal-tool.js';
+
 

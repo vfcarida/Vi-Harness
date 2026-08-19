@@ -1,0 +1,9 @@
+{
+  "id": "git-bisect-bug",
+  "category": "software-engineering",
+  "difficulty": "easy",
+  "tags": ["git", "regression", "bug-fix"],
+  "timeout": 300,
+  "instruction": "Fix the regression in regression.js so that compute() returns 42.",
+  "testScript": "node -e \"const mod = require('./regression.js'); if (mod.compute() !== 42) process.exit(1);\""
+}
