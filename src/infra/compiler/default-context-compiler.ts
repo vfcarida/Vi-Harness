@@ -90,7 +90,11 @@ export class DefaultContextCompiler implements ContextCompiler {
       scoredObjects,
       effectiveMaxTokens,
       now.getTime(),
-      { modelContextTokens: modelMaxContext },
+      {
+        modelContextTokens: modelMaxContext,
+        collapseStore: request.collapseStore,
+        ...request.compactionOptions,
+      },
     );
 
     const retainedObjects = compressionResult.retained;

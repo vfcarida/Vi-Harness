@@ -30,6 +30,8 @@ export enum ContextObjectType {
   USER_INSTRUCTION = 'USER_INSTRUCTION',
   SECURITY_RULE = 'SECURITY_RULE',
   LEARNED_PATTERN = 'LEARNED_PATTERN',
+  ATTEMPT = 'ATTEMPT',
+  SUMMARY = 'SUMMARY',
 }
 
 // ---------------------------------------------------------------------------

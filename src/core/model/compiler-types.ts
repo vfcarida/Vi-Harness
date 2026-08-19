@@ -52,7 +52,7 @@ export const DEFAULT_SCORING_WEIGHTS: Readonly<CompilerScoringWeights> = {
 // Dry-Run Explanation Types
 // ---------------------------------------------------------------------------
 
-export type ItemAction = 'RETAINED' | 'OMITTED' | 'SUMMARIZED' | 'TRIMMED';
+export type ItemAction = 'RETAINED' | 'OMITTED' | 'SUMMARIZED' | 'TRIMMED' | 'COLLAPSED';
 
 export interface CompilationItemExplanation {
   readonly id: ContextId | string;
@@ -69,6 +69,97 @@ export interface CompilationExplanation {
   readonly riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   readonly summary: string;
 }
+
+// ---------------------------------------------------------------------------
+// Tool-Result Pruning Types (Deterministic Pre-Compaction)
+// ---------------------------------------------------------------------------
+
+export interface ContentBlock {
+  readonly type: 'text' | string;
+  readonly text?: string;
+  readonly [key: string]: unknown;
+}
+
+export interface PrunedEntry {
+  readonly id: string;
+  readonly originalSize: number;
+  readonly prunedSize: number;
+  readonly charsRemoved: number;
+}
+
+export interface PruneResult {
+  readonly pruned: ReadonlyArray<PrunedEntry>;
+  readonly charsRemoved: number;
+}
+
+export interface ToolResultPruner {
+  /** Measure text content in Unicode code points */
+  measureContent(blocks: ReadonlyArray<ContentBlock>): number;
+  /** Replace over-budget text middle while retaining structure */
+  pruneContent(blocks: ReadonlyArray<ContentBlock>, maxCodePoints?: number): ContentBlock[] | null;
+  /** Prune all over-budget tool results in one pass */
+  pruneSession(items: ReadonlyArray<any>): PruneResult;
+}
+
+// ---------------------------------------------------------------------------
+// Context Collapse Types (Virtual Read-Time Projection)
+// ---------------------------------------------------------------------------
+
+export interface CollapseMetadata {
+  readonly headId: string;
+  readonly anchorId: string;
+  readonly tailId: string;
+  readonly collapsedCount: number;
+  readonly originalTokens: number;
+  readonly collapsedTokens: number;
+}
+
+export interface CollapseRecord {
+  readonly id: string;
+  readonly metadata: CollapseMetadata;
+  readonly summary: string;
+  readonly originalObjects: ReadonlyArray<ContextObject>;
+  readonly createdAt: Date;
+}
+
+export interface CollapseStore {
+  saveCollapse(record: CollapseRecord): Promise<void> | void;
+  getCollapse(id: string): Promise<CollapseRecord | undefined> | CollapseRecord | undefined;
+  getAllCollapses(): Promise<ReadonlyArray<CollapseRecord>> | ReadonlyArray<CollapseRecord>;
+  clear(): Promise<void> | void;
+}
+
+// ---------------------------------------------------------------------------
+// Compaction Lock & Crash Recovery Types
+// ---------------------------------------------------------------------------
+
+export interface CompactionLock {
+  acquire(sessionId: string): boolean; // false if already locked
+  release(sessionId: string, error?: Error): void;
+  isOrphaned(sessionId: string): boolean; // detect crash mid-compaction
+  recover(sessionId: string): void; // clean up orphaned lock
+}
+
+// ---------------------------------------------------------------------------
+// Compaction Triggers & Options
+// ---------------------------------------------------------------------------
+
+export type CompactionTrigger = 'pressure' | 'context-overflow';
+
+export interface MultiTierCompressorOptions {
+  readonly modelContextTokens?: number;
+  readonly aggressiveThreshold?: number; // 0.0 - 1.0 threshold
+  readonly maxToolResultTokens?: number;
+  readonly collapseThreshold?: number;
+  readonly trigger?: CompactionTrigger;
+  readonly aggressiveOnOverflow?: boolean;
+  readonly sessionId?: string;
+  readonly lock?: CompactionLock;
+  readonly collapseStore?: CollapseStore;
+  readonly pruner?: ToolResultPruner;
+}
+
+export type CompactionOptions = MultiTierCompressorOptions;
 
 // ---------------------------------------------------------------------------
 // Metrics
@@ -103,6 +194,8 @@ export interface ContextCompilationRequest {
   readonly weights?: Partial<CompilerScoringWeights>;
   readonly repoSymbolMap?: import('./symbol-types.js').RepoSymbolMap;
   readonly useSymbolMap?: boolean;
+  readonly collapseStore?: CollapseStore;
+  readonly compactionOptions?: Partial<MultiTierCompressorOptions>;
 }
 
 export interface ContextCompilationResult {

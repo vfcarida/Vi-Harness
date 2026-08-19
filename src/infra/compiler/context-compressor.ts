@@ -1,11 +1,13 @@
 /**
- * Multi-Tier Progressive Context Compressor (Claude Code & Aider inspired).
+ * Multi-Tier Progressive Context Compressor (Claude Code & DeepSeek Harness inspired).
  *
- * Implements the 4-Stage Progressive Compaction Pipeline:
+ * Implements the 5-Stage Progressive Compaction Pipeline (Lazy Degradation):
  *
+ * 0. BUDGET REDUCTION: Capping per-tool-result token counts with boundary truncation markers.
+ * 0.5 TOOL-RESULT PRUNING: Deterministic head/middle/tail pruning without LLM calls.
  * 1. SNIP: Pruning ephemeral noise, low-value diagnostic logs, and trivial chatter.
  * 2. MICRO-COMPACT: Compacting repetitive tool execution outputs and command stdout.
- * 3. COLLAPSE: Merging and consolidating stale historical episodic trajectories.
+ * 3. CONTEXT COLLAPSE: Read-time virtual projection preserving stored history (tracks headId, anchorId, tailId).
  * 4. AUTO-COMPACT: Final model-aware adaptive compaction against strict token limits.
  *
  * INVARIANT RULE: Critical user requirements, architectural decisions, approved constraints,
@@ -15,12 +17,15 @@ import type { ContextObject } from '../../core/model/context-object.js';
 import { ContextObjectType } from '../../core/model/context-object.js';
 import { ContextTier } from '../../core/model/context.js';
 import type { ScoredContextObject } from './context-ranker.js';
-import type { CompilationItemExplanation } from '../../core/model/compiler-types.js';
+import type {
+  CompilationItemExplanation,
+  MultiTierCompressorOptions,
+  CollapseRecord,
+} from '../../core/model/compiler-types.js';
+import { InMemoryCollapseStore } from './context-collapse.js';
+import { DefaultToolResultPruner } from './tool-result-pruner.js';
 
-export interface MultiTierCompressorOptions {
-  readonly modelContextTokens?: number;
-  readonly aggressiveThreshold?: number; // 0.0 - 1.0 threshold
-}
+export type { MultiTierCompressorOptions };
 
 export interface CompressionResult {
   readonly retained: ReadonlyArray<ContextObject>;
@@ -28,13 +33,51 @@ export interface CompressionResult {
   readonly explanations: ReadonlyArray<CompilationItemExplanation>;
   readonly totalTokens: number;
   readonly pipelineStagesRun: ReadonlyArray<string>;
+  readonly collapsesCreated?: ReadonlyArray<CollapseRecord>;
 }
 
 export class ContextCompressor {
   /**
-   * Execute 4-Stage Progressive Multi-Tier Compaction.
+   * Execute 5-Stage Progressive Multi-Tier Compaction Pipeline.
    */
   static compress(
+    scoredObjects: ReadonlyArray<ScoredContextObject>,
+    maxTokens: number,
+    nowMs: number,
+    options?: MultiTierCompressorOptions,
+  ): CompressionResult {
+    const sessionId = options?.sessionId;
+    const lock = options?.lock;
+
+    // Lock Acquisition & Crash Recovery (DeepSeek Harness)
+    let lockAcquired = false;
+    if (lock && sessionId) {
+      if (lock.isOrphaned(sessionId)) {
+        lock.recover(sessionId);
+      }
+      lockAcquired = lock.acquire(sessionId);
+      if (!lockAcquired) {
+        throw new Error(
+          `Compaction lock could not be acquired for session ${sessionId}: concurrent compaction in progress`,
+        );
+      }
+    }
+
+    try {
+      return this.executePipeline(scoredObjects, maxTokens, nowMs, options);
+    } catch (err) {
+      if (lock && sessionId && lockAcquired) {
+        lock.release(sessionId, err instanceof Error ? err : new Error(String(err)));
+      }
+      throw err;
+    } finally {
+      if (lock && sessionId && lockAcquired) {
+        lock.release(sessionId);
+      }
+    }
+  }
+
+  private static executePipeline(
     scoredObjects: ReadonlyArray<ScoredContextObject>,
     maxTokens: number,
     nowMs: number,
@@ -43,14 +86,42 @@ export class ContextCompressor {
     const retained: ContextObject[] = [];
     const omitted: ContextObject[] = [];
     const explanations: CompilationItemExplanation[] = [];
-    const pipelineStagesRun: string[] = ['SNIP', 'MICRO_COMPACT', 'COLLAPSE', 'AUTO_COMPACT'];
+    const pipelineStagesRun: string[] = [
+      'BUDGET_REDUCTION',
+      'TOOL_PRUNE',
+      'SNIP',
+      'MICRO_COMPACT',
+      'COLLAPSE',
+      'AUTO_COMPACT',
+    ];
 
     const modelMax = options?.modelContextTokens ?? 128000;
-    // Model-aware thresholds: Small-window models compact much earlier than large-window models
+    const trigger = options?.trigger ?? 'pressure';
+    const isOverflow = trigger === 'context-overflow';
     const isSmallWindow = modelMax <= 32000;
-    const snipThreshold = isSmallWindow ? 0.40 : 0.75;
-    const microCompactThreshold = isSmallWindow ? 0.50 : 0.80;
-    const collapseThreshold = isSmallWindow ? 0.60 : 0.85;
+
+    // Compaction Thresholds (Pressure vs Overflow)
+    const snipThreshold = isOverflow
+      ? (options?.aggressiveThreshold ?? 0.20)
+      : isSmallWindow
+        ? 0.40
+        : 0.75;
+    const microCompactThreshold = isOverflow
+      ? (options?.aggressiveThreshold ? options.aggressiveThreshold + 0.10 : 0.30)
+      : isSmallWindow
+        ? 0.50
+        : 0.80;
+    const collapseThreshold = isOverflow
+      ? (options?.collapseThreshold ?? 0.40)
+      : isSmallWindow
+        ? 0.60
+        : (options?.collapseThreshold ?? 0.85);
+
+    // Tool Result Cap
+    const maxToolResultTokens =
+      options?.maxToolResultTokens ?? (isOverflow ? 4000 : 8000);
+    const pruner = options?.pruner ?? new DefaultToolResultPruner(maxToolResultTokens * 4);
+    const collapseStore = options?.collapseStore ?? new InMemoryCollapseStore();
 
     // Step 0: Initial Sorting — Invariant MUST-PRESERVE items first, then score descending
     const sorted = [...scoredObjects].sort((a, b) => {
@@ -62,6 +133,7 @@ export class ContextCompressor {
 
     let currentTokens = 0;
     const seenToolSignatures = new Map<string, number>();
+    const collapsesCreated: CollapseRecord[] = [];
 
     for (const scored of sorted) {
       let obj = scored.object;
@@ -85,6 +157,63 @@ export class ContextCompressor {
       }
 
       // ---------------------------------------------------------------------
+      // STAGE 0: BUDGET REDUCTION (Cap per-tool-result token counts)
+      // ---------------------------------------------------------------------
+      const isToolOutput =
+        obj.type === ContextObjectType.OBSERVATION ||
+        obj.tags.includes('tool_output') ||
+        obj.tags.includes('stdout');
+
+      if (isToolOutput && obj.costTokens > maxToolResultTokens) {
+        const originalTokens = obj.costTokens;
+        const maxChars = maxToolResultTokens * 4;
+        const truncatedContent =
+          obj.content.slice(0, maxChars) +
+          `\n[... truncated from ${originalTokens} to ${maxToolResultTokens} tokens ...]`;
+        obj = {
+          ...obj,
+          content: truncatedContent,
+          costTokens: maxToolResultTokens,
+        };
+        explanations.push({
+          id: obj.id,
+          type: obj.type,
+          action: 'TRIMMED',
+          score: scored.score,
+          tokenCost: maxToolResultTokens,
+          reason: `Stage 0 (Budget Reduction): Tool result capped to ${maxToolResultTokens} tokens`,
+          mustPreserve: false,
+        });
+      }
+
+      // ---------------------------------------------------------------------
+      // STAGE 0.5: TOOL-RESULT PRUNING (Deterministic head/middle/tail pruning)
+      // ---------------------------------------------------------------------
+      if (isToolOutput && pruner.measureContent([{ type: 'text', text: obj.content }]) > maxToolResultTokens * 2) {
+        const { text: prunedText, pruned, charsRemoved } = (pruner as DefaultToolResultPruner).pruneText(
+          obj.content,
+          maxToolResultTokens * 2,
+        );
+        if (pruned) {
+          const newTokens = Math.ceil(prunedText.length / 4);
+          obj = {
+            ...obj,
+            content: prunedText,
+            costTokens: newTokens,
+          };
+          explanations.push({
+            id: obj.id,
+            type: obj.type,
+            action: 'TRIMMED',
+            score: scored.score,
+            tokenCost: newTokens,
+            reason: `Stage 0.5 (Tool-Result Pruning): Deterministic head/middle/tail pruning removed ${charsRemoved} characters`,
+            mustPreserve: false,
+          });
+        }
+      }
+
+      // ---------------------------------------------------------------------
       // STAGE 1: SNIP (Prune ephemeral low-value diagnostic noise)
       // ---------------------------------------------------------------------
       const ageHours = (nowMs - obj.lastUsed.getTime()) / (1000 * 60 * 60);
@@ -98,7 +227,9 @@ export class ContextCompressor {
 
       if (
         isEphemeralNoise &&
-        (currentTokens + obj.costTokens > maxTokens * snipThreshold || ageHours > 24 || obj.tags.includes('log'))
+        (currentTokens + obj.costTokens > maxTokens * snipThreshold ||
+          ageHours > 24 ||
+          obj.tags.includes('log'))
       ) {
         omitted.push(obj);
         explanations.push({
@@ -116,7 +247,7 @@ export class ContextCompressor {
       // ---------------------------------------------------------------------
       // STAGE 2: MICRO-COMPACT (Repeated tool outputs and redundant executions)
       // ---------------------------------------------------------------------
-      if (obj.type === ContextObjectType.OBSERVATION || obj.tags.includes('tool_output')) {
+      if (isToolOutput) {
         const signature = this.computeToolOutputSignature(obj.content);
         const occurrences = seenToolSignatures.get(signature) ?? 0;
         seenToolSignatures.set(signature, occurrences + 1);
@@ -142,24 +273,59 @@ export class ContextCompressor {
       }
 
       // ---------------------------------------------------------------------
-      // STAGE 3: COLLAPSE (Consolidate stale L2 episodic trajectories)
+      // STAGE 3: CONTEXT COLLAPSE (Read-time virtual projection)
       // ---------------------------------------------------------------------
-      if (
-        obj.tier === ContextTier.L2_EPISODIC &&
+      const isEpisodic =
+        obj.tier === ContextTier.L2_EPISODIC ||
+        obj.type === ContextObjectType.ATTEMPT ||
+        obj.tags.includes('attempt') ||
+        obj.tags.includes('episodic');
+
+      const shouldCollapse =
+        isEpisodic &&
         obj.importance < 0.75 &&
-        currentTokens > maxTokens * collapseThreshold
-      ) {
-        const collapsedSummary = `[Collapsed Trajectory Milestone]: ${obj.type} [${obj.id.slice(0, 8)}] - ${obj.content.slice(0, 100)}...`;
+        (currentTokens > maxTokens * collapseThreshold ||
+          (isOverflow && options?.aggressiveOnOverflow));
+
+      if (shouldCollapse) {
+        const collapseId = `collapse_${obj.id.slice(0, 8)}_${nowMs}`;
+        const collapsedSummary = `[Collapsed Trajectory Milestone: ${obj.id}]: ${obj.type} - ${obj.content.slice(0, 100)}...`;
         const newTokens = Math.ceil(collapsedSummary.length / 4);
+
+        const record: CollapseRecord = {
+          id: collapseId,
+          metadata: {
+            headId: obj.id,
+            anchorId: obj.id,
+            tailId: obj.id,
+            collapsedCount: 1,
+            originalTokens: obj.costTokens,
+            collapsedTokens: newTokens,
+          },
+          summary: collapsedSummary,
+          originalObjects: [obj],
+          createdAt: new Date(nowMs),
+        };
+        collapseStore.saveCollapse(record);
+        collapsesCreated.push(record);
+
         obj = {
           ...obj,
           content: collapsedSummary,
           costTokens: newTokens,
+          metadata: {
+            ...obj.metadata,
+            collapseId,
+            headId: obj.id,
+            anchorId: obj.id,
+            tailId: obj.id,
+            isVirtualProjection: true,
+          },
         };
         explanations.push({
           id: obj.id,
           type: obj.type,
-          action: 'COLLAPSED' as any,
+          action: 'COLLAPSED',
           score: scored.score,
           tokenCost: newTokens,
           reason: 'COLLAPSE Stage: Older episodic trajectory merged into condensed milestone',
@@ -205,6 +371,7 @@ export class ContextCompressor {
       explanations,
       totalTokens: currentTokens,
       pipelineStagesRun,
+      collapsesCreated,
     };
   }
 
