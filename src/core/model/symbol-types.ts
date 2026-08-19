@@ -38,12 +38,28 @@ export interface FileSymbolMap {
   readonly outline: string;
 }
 
+export interface ReferenceEdge {
+  readonly sourceFile: string;
+  readonly targetFile: string;
+  readonly symbolName: string;
+  readonly count: number;
+}
+
+export interface ReferenceGraph {
+  readonly nodes: ReadonlySet<string>; // file paths
+  readonly edges: ReadonlyArray<ReferenceEdge>;
+  readonly symbolDefinitions: ReadonlyMap<string, { readonly filePath: string; readonly symbol: CodeSymbol }>;
+  readonly fileReferences: ReadonlyMap<string, ReadonlyMap<string, number>>; // filePath -> (symbolName -> count)
+}
+
 export interface RepoSymbolMap {
   readonly rootPath: string;
   readonly files: ReadonlyMap<string, FileSymbolMap>;
   readonly totalSymbols: number;
   readonly totalFiles: number;
   readonly generatedAt: Date;
+  readonly referenceGraph?: ReferenceGraph;
+  readonly symbolRanks?: ReadonlyMap<string, number>;
 }
 
 export interface SymbolIndexOptions {
@@ -57,6 +73,8 @@ export interface RepoMapRenderOptions {
   readonly maxTokens?: number;
   readonly focusFiles?: ReadonlyArray<string>;
   readonly verbose?: boolean;
+  readonly rankedSymbolsOnly?: boolean;
+  readonly minRank?: number;
 }
 
 export type DynamicContextAction = 'ADD' | 'DROP' | 'FOCUS' | 'RESET';

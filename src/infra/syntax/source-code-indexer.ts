@@ -14,6 +14,8 @@ import type {
   FileSymbolMap,
   RepoSymbolMap,
   RepoMapRenderOptions,
+  ReferenceGraph,
+  ReferenceEdge,
 } from '../../core/model/symbol-types.js';
 import { SymbolKind } from '../../core/model/symbol-types.js';
 
@@ -59,6 +61,176 @@ export class SourceCodeIndexer {
   }
 
   /**
+   * Builds cross-file reference graph mapping symbol definitions and cross-file usages.
+   */
+  static buildReferenceGraph(
+    files: Map<string, string>,
+    fileMaps: Map<string, FileSymbolMap>,
+  ): ReferenceGraph {
+    const nodes = new Set<string>(files.keys());
+    const symbolDefinitions = new Map<string, { readonly filePath: string; readonly symbol: CodeSymbol }>();
+
+    // 1. Index all defined symbols
+    for (const [filePath, fileMap] of fileMaps.entries()) {
+      for (const sym of fileMap.symbols) {
+        if (!symbolDefinitions.has(sym.name) || sym.isExported) {
+          symbolDefinitions.set(sym.name, { filePath, symbol: sym });
+        }
+      }
+    }
+
+    const edges: ReferenceEdge[] = [];
+    const fileReferences = new Map<string, Map<string, number>>();
+
+    // 2. Scan each file for references to external symbols
+    for (const [filePath, content] of files.entries()) {
+      const currentFileMap = fileMaps.get(filePath);
+      const localSymbolNames = new Set(currentFileMap?.symbols.map((s) => s.name) ?? []);
+      const refCounts = new Map<string, number>();
+
+      // Extract identifier tokens
+      const matches = content.matchAll(/\b([A-Za-z_$][A-Za-z0-9_$]*)\b/g);
+      for (const match of matches) {
+        const id = match[1]!;
+        if (symbolDefinitions.has(id) && !localSymbolNames.has(id)) {
+          const def = symbolDefinitions.get(id)!;
+          if (def.filePath !== filePath) {
+            refCounts.set(id, (refCounts.get(id) ?? 0) + 1);
+          }
+        }
+      }
+
+      // Check import statements for explicit imported symbols
+      if (currentFileMap) {
+        for (const imp of currentFileMap.imports) {
+          for (const [symName, def] of symbolDefinitions.entries()) {
+            if (def.filePath !== filePath && !localSymbolNames.has(symName)) {
+              if (imp.includes(symName) && !refCounts.has(symName)) {
+                refCounts.set(symName, 1);
+              }
+            }
+          }
+        }
+      }
+
+      fileReferences.set(filePath, refCounts);
+
+      // Build edges: referencing file -> defining file
+      for (const [symbolName, count] of refCounts.entries()) {
+        const def = symbolDefinitions.get(symbolName)!;
+        edges.push({
+          sourceFile: filePath,
+          targetFile: def.filePath,
+          symbolName,
+          count,
+        });
+      }
+    }
+
+    return {
+      nodes,
+      edges,
+      symbolDefinitions,
+      fileReferences,
+    };
+  }
+
+  /**
+   * Implements iterative PageRank algorithm to rank symbols by reference centrality.
+   * Symbols referenced by many other files receive high importance scores.
+   */
+  static rankSymbols(
+    graph: ReferenceGraph,
+    fileMaps: Map<string, FileSymbolMap>,
+  ): Map<string, number> {
+    const fileList = Array.from(graph.nodes);
+    const N = fileList.length;
+    if (N === 0) return new Map();
+
+    const d = 0.85; // Standard PageRank damping factor
+    const iterations = 20;
+
+    const outWeights = new Map<string, number>();
+    const inEdges = new Map<string, ReferenceEdge[]>();
+
+    for (const f of fileList) {
+      outWeights.set(f, 0);
+      inEdges.set(f, []);
+    }
+
+    for (const edge of graph.edges) {
+      outWeights.set(edge.sourceFile, (outWeights.get(edge.sourceFile) ?? 0) + edge.count);
+      inEdges.get(edge.targetFile)?.push(edge);
+    }
+
+    let ranks = new Map<string, number>();
+    for (const f of fileList) {
+      ranks.set(f, 1 / N);
+    }
+
+    // Power Iteration
+    for (let iter = 0; iter < iterations; iter++) {
+      const nextRanks = new Map<string, number>();
+      let danglingMass = 0;
+
+      for (const f of fileList) {
+        if ((outWeights.get(f) ?? 0) === 0) {
+          danglingMass += ranks.get(f)!;
+        }
+      }
+
+      for (const f of fileList) {
+        let incomingSum = 0;
+        const incoming = inEdges.get(f) ?? [];
+
+        for (const edge of incoming) {
+          const srcRank = ranks.get(edge.sourceFile)!;
+          const srcOut = outWeights.get(edge.sourceFile) || 1;
+          incomingSum += srcRank * (edge.count / srcOut);
+        }
+
+        const newRank = (1 - d) / N + d * (incomingSum + danglingMass / N);
+        nextRanks.set(f, newRank);
+      }
+
+      ranks = nextRanks;
+    }
+
+    // Derive individual symbol scores from file PageRank and incoming direct references
+    const symbolRanks = new Map<string, number>();
+
+    for (const [filePath, fileMap] of fileMaps.entries()) {
+      const fileRank = ranks.get(filePath) ?? 1 / N;
+
+      for (const sym of fileMap.symbols) {
+        let directRefCount = 0;
+        for (const edge of graph.edges) {
+          if (edge.targetFile === filePath && edge.symbolName === sym.name) {
+            directRefCount += edge.count;
+          }
+        }
+
+        const exportMultiplier = sym.isExported ? 1.5 : 1.0;
+        const kindMultiplier =
+          sym.kind === SymbolKind.CLASS || sym.kind === SymbolKind.INTERFACE || sym.kind === SymbolKind.TYPE_ALIAS
+            ? 1.4
+            : sym.kind === SymbolKind.FUNCTION || sym.kind === SymbolKind.METHOD || sym.kind === SymbolKind.ENUM
+              ? 1.2
+              : 1.0;
+
+        const score = fileRank * (1 + directRefCount * 3) * exportMultiplier * kindMultiplier;
+
+        symbolRanks.set(`${filePath}:${sym.name}`, score);
+        if (!symbolRanks.has(sym.name) || symbolRanks.get(sym.name)! < score) {
+          symbolRanks.set(sym.name, score);
+        }
+      }
+    }
+
+    return symbolRanks;
+  }
+
+  /**
    * Builds a full RepoSymbolMap from a collection of file paths and contents.
    */
   static buildRepoMap(files: Map<string, string>): RepoSymbolMap {
@@ -71,12 +243,17 @@ export class SourceCodeIndexer {
       totalSymbols += fileMap.symbols.length;
     }
 
+    const referenceGraph = this.buildReferenceGraph(files, fileMaps);
+    const symbolRanks = this.rankSymbols(referenceGraph, fileMaps);
+
     return {
       rootPath: '.',
       files: fileMaps,
       totalSymbols,
       totalFiles: fileMaps.size,
       generatedAt: new Date(),
+      referenceGraph,
+      symbolRanks,
     };
   }
 
@@ -92,11 +269,29 @@ export class SourceCodeIndexer {
     const sections: string[] = [];
     let estimatedTokens = 0;
 
-    // Prioritize focus files first, then sort remaining alphabetically
+    const symbolRanks = repoMap.symbolRanks;
+
+    // Score files by max symbol rank or focus status
+    const fileScores = new Map<string, number>();
+    for (const fileMap of repoMap.files.values()) {
+      let maxScore = 0;
+      for (const sym of fileMap.symbols) {
+        const score = symbolRanks?.get(`${fileMap.filePath}:${sym.name}`) ?? symbolRanks?.get(sym.name) ?? 0;
+        if (score > maxScore) maxScore = score;
+      }
+      fileScores.set(fileMap.filePath, maxScore);
+    }
+
+    // Sort files by focus status first, then highest symbol score, then alphabetically
     const sortedFiles = Array.from(repoMap.files.values()).sort((a, b) => {
       const aFocus = focusFiles.has(a.filePath) ? 1 : 0;
       const bFocus = focusFiles.has(b.filePath) ? 1 : 0;
       if (aFocus !== bFocus) return bFocus - aFocus;
+
+      const aScore = fileScores.get(a.filePath) ?? 0;
+      const bScore = fileScores.get(b.filePath) ?? 0;
+      if (Math.abs(aScore - bScore) > 0.0001) return bScore - aScore;
+
       return a.filePath.localeCompare(b.filePath);
     });
 
@@ -105,7 +300,14 @@ export class SourceCodeIndexer {
         continue;
       }
 
-      const fileSection = fileMap.outline;
+      // Format outline, prioritizing higher-ranked symbols if rankedSymbolsOnly
+      let fileSection: string;
+      if (symbolRanks && symbolRanks.size > 0 && options?.rankedSymbolsOnly) {
+        fileSection = this.generateRankedOutline(fileMap, symbolRanks, options.minRank);
+      } else {
+        fileSection = fileMap.outline;
+      }
+
       const sectionTokens = Math.ceil(fileSection.length / 4);
 
       if (estimatedTokens + sectionTokens > maxTokens && sections.length > 0) {
@@ -118,6 +320,52 @@ export class SourceCodeIndexer {
     }
 
     return sections.join('\n\n');
+  }
+
+  /**
+   * Generates a ranked, compressed Aider-format outline for a file.
+   */
+  private static generateRankedOutline(
+    fileMap: FileSymbolMap,
+    symbolRanks: ReadonlyMap<string, number>,
+    minRank?: number,
+  ): string {
+    const lines: string[] = [`File: ${fileMap.filePath}`];
+
+    if (fileMap.imports.length > 0) {
+      lines.push(`  // Imports (${fileMap.imports.length}):`);
+      for (const imp of fileMap.imports.slice(0, 2)) {
+        lines.push(`  ${imp}`);
+      }
+      if (fileMap.imports.length > 2) {
+        lines.push(`  // ... [${fileMap.imports.length - 2} more imports]`);
+      }
+    }
+
+    const symbols = [...fileMap.symbols].sort((a, b) => {
+      const aScore = symbolRanks.get(`${fileMap.filePath}:${a.name}`) ?? symbolRanks.get(a.name) ?? 0;
+      const bScore = symbolRanks.get(`${fileMap.filePath}:${b.name}`) ?? symbolRanks.get(b.name) ?? 0;
+      return bScore - aScore;
+    });
+
+    const filteredSymbols = minRank !== undefined
+      ? symbols.filter((s) => (symbolRanks.get(`${fileMap.filePath}:${s.name}`) ?? symbolRanks.get(s.name) ?? 0) >= minRank)
+      : symbols;
+
+    if (filteredSymbols.length > 0) {
+      lines.push('  // Top Symbols:');
+      for (const sym of filteredSymbols) {
+        const indent = sym.parentSymbolName ? '    ' : '  ';
+        lines.push(`${indent}${sym.signature}`);
+      }
+      if (symbols.length > filteredSymbols.length) {
+        lines.push(`  // ... [${symbols.length - filteredSymbols.length} lower-ranked symbols omitted]`);
+      }
+    } else {
+      lines.push('  // (No top-level exported symbols detected)');
+    }
+
+    return lines.join('\n');
   }
 
   // -------------------------------------------------------------------------

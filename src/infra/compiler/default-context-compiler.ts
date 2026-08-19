@@ -252,11 +252,23 @@ export class DefaultContextCompiler implements ContextCompiler {
       }
     }
 
-    // Repository Symbol Map (Aider-style AST structural map)
+    // Repository Symbol Map (Aider-style AST structural map with Dynamic Token Budget)
     if (request.repoSymbolMap) {
+      // Dynamic token budget allocation:
+      // - 40% when no files are actively in context (broad repository discovery)
+      // - 10% when active files exist in context (compact outline, space freed for file content)
+      const hasActiveFiles = Boolean(request.currentFiles && request.currentFiles.length > 0);
+      const budgetRatio = hasActiveFiles ? 0.10 : 0.40;
+      const maxBudgetCap = hasActiveFiles ? 1000 : 4000;
+      const dynamicMaxTokens = Math.min(
+        maxBudgetCap,
+        Math.max(100, Math.floor(request.budget.maxTokens * budgetRatio)),
+      );
+
       const renderedMap = SourceCodeIndexer.renderRepoMap(request.repoSymbolMap, {
-        maxTokens: Math.min(2000, Math.floor(request.budget.maxTokens * 0.3)),
+        maxTokens: dynamicMaxTokens,
         focusFiles: request.currentFiles,
+        rankedSymbolsOnly: true,
       });
 
       if (renderedMap.length > 0) {

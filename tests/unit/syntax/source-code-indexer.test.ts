@@ -237,4 +237,211 @@ func MainHandler(w int) {
       expect(reFiltered).toHaveLength(3);
     });
   });
+
+  describe('5. PageRank Graph Ranking & Dynamic Token Budget (P003)', () => {
+    it('should build a cross-file reference graph and compute PageRank symbol importance scores', () => {
+      const files = new Map<string, string>();
+
+      // File A: Core database pool (referenced heavily by B, C, D)
+      files.set(
+        'src/db/pool.ts',
+        `
+export interface PoolConfig {
+  maxConnections: number;
+}
+
+export class DatabasePool {
+  public acquire(): Connection { return new Connection(); }
+  public release(conn: Connection): void {}
+}
+`,
+      );
+
+      // File B: User service (references DatabasePool)
+      files.set(
+        'src/services/user-service.ts',
+        `
+import { DatabasePool } from '../db/pool.js';
+
+export class UserService {
+  constructor(private pool: DatabasePool) {}
+  public getUser(id: string) {
+    const conn = this.pool.acquire();
+    return { id };
+  }
+}
+`,
+      );
+
+      // File C: Order service (references DatabasePool and UserService)
+      files.set(
+        'src/services/order-service.ts',
+        `
+import { DatabasePool } from '../db/pool.js';
+import { UserService } from './user-service.js';
+
+export class OrderService {
+  constructor(private pool: DatabasePool, private userService: UserService) {}
+  public createOrder() {
+    const conn = this.pool.acquire();
+  }
+}
+`,
+      );
+
+      // File D: Isolated utility (not referenced anywhere)
+      files.set(
+        'src/utils/math.ts',
+        `
+export function calculateFibonacci(n: number): number {
+  return n <= 1 ? n : calculateFibonacci(n - 1) + calculateFibonacci(n - 2);
+}
+`,
+      );
+
+      const repoMap = SourceCodeIndexer.buildRepoMap(files);
+
+      // 1. Verify Reference Graph structure
+      expect(repoMap.referenceGraph).toBeDefined();
+      const graph = repoMap.referenceGraph!;
+      expect(graph.nodes.size).toBe(4);
+      expect(graph.edges.length).toBeGreaterThanOrEqual(3);
+
+      // Edges pointing to DatabasePool from user-service and order-service
+      const poolEdges = graph.edges.filter((e) => e.symbolName === 'DatabasePool');
+      expect(poolEdges.length).toBe(2);
+
+      // 2. Verify PageRank symbol scoring
+      expect(repoMap.symbolRanks).toBeDefined();
+      const ranks = repoMap.symbolRanks!;
+
+      const poolScore = ranks.get('DatabasePool') ?? 0;
+      const userServiceScore = ranks.get('UserService') ?? 0;
+      const mathScore = ranks.get('calculateFibonacci') ?? 0;
+
+      // DatabasePool is referenced the most -> highest rank
+      expect(poolScore).toBeGreaterThan(userServiceScore);
+      // UserService is referenced by OrderService -> higher rank than isolated math utility
+      expect(userServiceScore).toBeGreaterThan(mathScore);
+      // Math utility has non-zero base rank, but lowest in the codebase
+      expect(mathScore).toBeGreaterThan(0);
+    });
+
+    it('should render compressed Aider-format repo map prioritizing top-ranked symbols within token budget', () => {
+      const files = new Map<string, string>();
+
+      files.set(
+        'src/core/engine.ts',
+        `
+export class ExecutionEngine {
+  public start(): void {}
+  public step(): void {}
+  public stop(): void {}
+}
+`,
+      );
+
+      files.set(
+        'src/app.ts',
+        `
+import { ExecutionEngine } from './core/engine.js';
+
+export class Application {
+  constructor(private engine: ExecutionEngine) {}
+  public run() { this.engine.start(); }
+}
+`,
+      );
+
+      const repoMap = SourceCodeIndexer.buildRepoMap(files);
+      const rendered = SourceCodeIndexer.renderRepoMap(repoMap, {
+        maxTokens: 500,
+        rankedSymbolsOnly: true,
+      });
+
+      expect(rendered).toContain('ExecutionEngine');
+      expect(rendered).toContain('Application');
+      expect(rendered).toContain('File: src/core/engine.ts');
+    });
+
+    it('should dynamically scale repo map token budget between 40% (no active files) and 10% (active files)', async () => {
+      const { DefaultContextCompiler } = await import('../../../src/infra/compiler/default-context-compiler.js');
+      const { SystemClock } = await import('../../../src/infra/time/system-clock.js');
+      const { UuidV7IdFactory } = await import('../../../src/infra/id/uuid-id-factory.js');
+      const { ModelCapability } = await import('../../../src/core/model/model-io.js');
+      const { TaskStatus } = await import('../../../src/core/model/task.js');
+
+      const idFactory = new UuidV7IdFactory();
+      const clock = new SystemClock();
+      const compiler = new DefaultContextCompiler({ idFactory, clock });
+
+      const files = new Map<string, string>();
+      for (let i = 1; i <= 50; i++) {
+        files.set(
+          `src/module_${i}.ts`,
+          `
+import { Helper } from './helper.js';
+export class ServiceModule${i} {
+  public execute(): void {}
+  public validate(data: unknown): boolean { return true; }
+  public transform(data: unknown): unknown { return data; }
+}
+`,
+        );
+      }
+      const repoMap = SourceCodeIndexer.buildRepoMap(files);
+
+      const targetModelDescriptor = {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        provider: 'openai',
+        capabilities: {
+          capabilities: [ModelCapability.CHAT],
+          maxContextTokens: 128000,
+          maxOutputTokens: 4096,
+          supportsToolCalling: true,
+          supportsStreaming: true,
+          supportsStructuredOutput: true,
+          supportsVision: true,
+        },
+      };
+
+      const baseRequest = {
+        goal: { id: idFactory.create<'Goal'>(), description: 'Refactor services', status: 'ACTIVE' as any, createdAt: new Date(), updatedAt: new Date() },
+        task: { id: idFactory.create<'Task'>(), goalId: idFactory.create<'Goal'>(), description: 'Refactor', status: TaskStatus.IN_PROGRESS, priority: 1, dependencies: [], createdAt: new Date(), updatedAt: new Date() },
+        currentState: 'IMPLEMENTING' as any,
+        targetModelDescriptor,
+        budget: { maxTokens: 4000, softLimitTokens: 3500, hardLimitTokens: 4000, maxOutputTokens: 1000 },
+        repoSymbolMap: repoMap,
+      };
+
+      // Case A: 0 active files in context -> expands up to 40% of 4000 = 1600 tokens
+      const resultNoFiles = await compiler.compile({
+        ...baseRequest,
+        currentFiles: [],
+      });
+
+      const repoMapEntryNoFiles = resultNoFiles.retainedObjects.find(
+        (o) => o.tags.includes('repo_map'),
+      );
+      expect(repoMapEntryNoFiles).toBeDefined();
+      const tokensNoFiles = repoMapEntryNoFiles!.costTokens;
+
+      // Case B: Active files in context -> contracts to 10% of 4000 = 400 tokens
+      const resultWithFiles = await compiler.compile({
+        ...baseRequest,
+        currentFiles: ['src/module_1.ts', 'src/module_2.ts'],
+      });
+
+      const repoMapEntryWithFiles = resultWithFiles.retainedObjects.find(
+        (o) => o.tags.includes('repo_map'),
+      );
+      expect(repoMapEntryWithFiles).toBeDefined();
+      const tokensWithFiles = repoMapEntryWithFiles!.costTokens;
+
+      // The budget contracts when files are being actively edited
+      expect(tokensNoFiles).toBeGreaterThan(tokensWithFiles);
+      expect(tokensWithFiles).toBeLessThanOrEqual(400);
+    });
+  });
 });
