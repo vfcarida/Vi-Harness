@@ -1,0 +1,12 @@
+{
+  "id": "cli-markdown-parser",
+  "title": "CLI Markdown Header & List Parser",
+  "category": "CLI_TOOL",
+  "difficulty": "EASY",
+  "mode": "FROM_SCRATCH",
+  "timeoutMs": 60000,
+  "maxCostDollars": 1.0,
+  "testCommands": [
+    "node test.js"
+  ]
+}

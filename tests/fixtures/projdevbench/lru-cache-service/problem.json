@@ -1,0 +1,15 @@
+{
+  "id": "lru-cache-service",
+  "title": "In-Memory LRU Cache with TTL Eviction",
+  "category": "DATA_PROCESSING",
+  "difficulty": "MEDIUM",
+  "mode": "SCAFFOLD",
+  "timeoutMs": 60000,
+  "maxCostDollars": 1.5,
+  "testCommands": [
+    "node test.js"
+  ],
+  "templateFiles": {
+    "lru-cache.js": "// Implement LruCache class with capacity and optional ttl\nexport class LruCache {\n  constructor(capacity = 3, ttlMs = 0) {\n    this.capacity = capacity;\n    this.ttlMs = ttlMs;\n  }\n  get(key) {}\n  set(key, value) {}\n  size() {}\n  clear() {}\n}\n"
+  }
+}

@@ -388,7 +388,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
           router: this.router,
           compiler: this.compiler,
           policyEngine: this.policyEngine,
-          toolExecutor: this.toolExecutor,
+          toolExecutor: options?.toolExecutor ?? this.toolExecutor,
           verificationEngine: this.verificationEngine,
           evidenceStore: this.evidenceStore,
           observerHub,

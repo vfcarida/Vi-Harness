@@ -1,0 +1,12 @@
+{
+  "id": "http-routing-engine",
+  "title": "Radix-Tree HTTP Route Matcher with Path Params & Wildcards",
+  "category": "WEB_SERVICE",
+  "difficulty": "HARD",
+  "mode": "FROM_SCRATCH",
+  "timeoutMs": 60000,
+  "maxCostDollars": 2.0,
+  "testCommands": [
+    "node test.js"
+  ]
+}

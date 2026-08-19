@@ -267,4 +267,28 @@ export type {
   CrossRunAnalysisReport,
 } from './telemetry/harness-diagnostic-engine.js';
 
+// ProjDevBench (Project Development Benchmark)
+export {
+  ProjDevTaskLoader,
+  ProjDevWorkspaceManager,
+  ProjDevEvaluator,
+  ProjDevExecutionAdapter,
+  ProjDevReportGenerator,
+  PROJDEVBENCH_KNOWN_LEADERBOARD,
+} from './eval/projdevbench/index.js';
+export type {
+  ProjDevCategory,
+  ProjDevDifficulty,
+  ProjDevMode,
+  TestVerdict,
+  TestCaseResult,
+  CodeReviewRule,
+  ProjDevProblem,
+  ProjDevProblemScore,
+  ProjDevBenchmarkReport,
+  LeaderboardEntry,
+  ProjDevFilterOptions,
+  ProjDevIsolatedWorkspace,
+} from './eval/projdevbench/index.js';
+
 

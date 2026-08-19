@@ -181,6 +181,7 @@ export interface ExecutionOptions {
   readonly maxAutoCorrectionsPerFile?: number; // Default 2
   readonly experienceStore?: import('../../infra/telemetry/experience-store.js').ExperienceStore;
   readonly autoTune?: boolean;
+  readonly toolExecutor?: import('../interfaces/tool-executor.js').ToolExecutor;
 }
 
 export interface ExecutionResult {
