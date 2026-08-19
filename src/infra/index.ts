@@ -71,6 +71,8 @@ export type { PruneOptions } from './compiler/tool-result-pruner.js';
 export { InMemoryCompactionLock } from './compiler/compaction-lock.js';
 export type { LockState, InMemoryCompactionLockOptions } from './compiler/compaction-lock.js';
 export { ContextValidator } from './compiler/context-validator.js';
+export { CachePrefixTracker } from './compiler/cache-prefix-tracker.js';
+export type { CacheEfficiencyReport } from './compiler/cache-prefix-tracker.js';
 export { DefaultContextCompiler } from './compiler/default-context-compiler.js';
 export type { DefaultContextCompilerOptions } from './compiler/default-context-compiler.js';
 

@@ -153,6 +153,12 @@ export interface RetryMetadata {
   readonly lastError?: string;
 }
 
+export interface CacheMetrics {
+  readonly cacheReadInputTokens?: number;
+  readonly cacheCreationInputTokens?: number;
+  readonly cacheDeletedInputTokens?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Model Response — vendor neutral
 // ---------------------------------------------------------------------------
@@ -168,6 +174,7 @@ export interface ModelResponse {
   readonly finishReason: FinishReason;
   readonly latencyMs: number;
   readonly estimatedCostDollars: number;
+  readonly cacheMetrics?: CacheMetrics;
   readonly retryMetadata?: RetryMetadata;
   readonly metadata?: Readonly<Record<string, unknown>>;
 }

@@ -144,6 +144,8 @@ export interface CompactionLock {
 // Compaction Triggers & Options
 // ---------------------------------------------------------------------------
 
+import type { CacheMetrics } from './model-io.js';
+
 export type CompactionTrigger = 'pressure' | 'context-overflow';
 
 export interface MultiTierCompressorOptions {
@@ -157,6 +159,9 @@ export interface MultiTierCompressorOptions {
   readonly lock?: CompactionLock;
   readonly collapseStore?: CollapseStore;
   readonly pruner?: ToolResultPruner;
+  readonly cachedPrefixIds?: ReadonlySet<string> | ReadonlyArray<string>;
+  readonly cacheMetrics?: CacheMetrics;
+  readonly deferBoundaryMarkers?: boolean;
 }
 
 export type CompactionOptions = MultiTierCompressorOptions;
@@ -195,6 +200,9 @@ export interface ContextCompilationRequest {
   readonly repoSymbolMap?: import('./symbol-types.js').RepoSymbolMap;
   readonly useSymbolMap?: boolean;
   readonly collapseStore?: CollapseStore;
+  readonly cachedPrefixIds?: ReadonlySet<string> | ReadonlyArray<string>;
+  readonly lastCacheMetrics?: CacheMetrics;
+  readonly deferBoundaryMarkers?: boolean;
   readonly compactionOptions?: Partial<MultiTierCompressorOptions>;
 }
 

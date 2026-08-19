@@ -74,10 +74,19 @@ const OpenAIResponseSchema = z.object({
     prompt_tokens: z.number().optional(),
     completion_tokens: z.number().optional(),
     total_tokens: z.number().optional(),
+    prompt_tokens_details: z.object({
+      cached_tokens: z.number().optional(),
+      cache_read_tokens: z.number().optional(),
+    }).passthrough().optional(),
     completion_tokens_details: z.object({
       reasoning_tokens: z.number().optional(),
-    }).optional(),
-  }).optional(),
+    }).passthrough().optional(),
+    cache_read_input_tokens: z.number().optional(),
+    cache_creation_input_tokens: z.number().optional(),
+    cache_deleted_input_tokens: z.number().optional(),
+    prompt_cache_hit_tokens: z.number().optional(),
+    prompt_cache_miss_tokens: z.number().optional(),
+  }).passthrough().optional(),
 });
 
 export class OpenAICompatibleProvider implements ModelProvider {
@@ -351,13 +360,42 @@ export class OpenAICompatibleProvider implements ModelProvider {
       }
     }
 
-    // Usage
-    const usageObj = responseData.usage ?? {};
+    // Usage & Cache Metrics
+    const usageObj = (responseData.usage ?? {}) as Record<string, any>;
+    const promptDetails = usageObj['prompt_tokens_details'] ?? {};
+    const cacheReadInputTokens =
+      promptDetails.cached_tokens ??
+      promptDetails.cache_read_tokens ??
+      usageObj['cache_read_input_tokens'] ??
+      usageObj['prompt_cache_hit_tokens'];
+
+    const cacheCreationInputTokens =
+      usageObj['cache_creation_input_tokens'] ??
+      usageObj['prompt_cache_miss_tokens'];
+
+    const cacheDeletedInputTokens =
+      usageObj['cache_deleted_input_tokens'];
+
+    const hasCacheData =
+      cacheReadInputTokens !== undefined ||
+      cacheCreationInputTokens !== undefined ||
+      cacheDeletedInputTokens !== undefined;
+
+    const cacheMetrics: import('../../core/model/model-io.js').CacheMetrics | undefined = hasCacheData
+      ? {
+          cacheReadInputTokens: typeof cacheReadInputTokens === 'number' ? cacheReadInputTokens : undefined,
+          cacheCreationInputTokens: typeof cacheCreationInputTokens === 'number' ? cacheCreationInputTokens : undefined,
+          cacheDeletedInputTokens: typeof cacheDeletedInputTokens === 'number' ? cacheDeletedInputTokens : undefined,
+        }
+      : undefined;
+
     const usage: TokenUsage = {
       inputTokens: usageObj.prompt_tokens ?? 0,
       outputTokens: usageObj.completion_tokens ?? 0,
       totalTokens: usageObj.total_tokens ?? (usageObj.prompt_tokens ?? 0) + (usageObj.completion_tokens ?? 0),
       reasoningTokens: usageObj.completion_tokens_details?.reasoning_tokens,
+      cacheReadTokens: typeof cacheReadInputTokens === 'number' ? cacheReadInputTokens : undefined,
+      cacheWriteTokens: typeof cacheCreationInputTokens === 'number' ? cacheCreationInputTokens : undefined,
     };
 
     const cost =
@@ -377,6 +415,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
       finishReason,
       latencyMs,
       estimatedCostDollars: cost,
+      cacheMetrics,
     };
   }
 }

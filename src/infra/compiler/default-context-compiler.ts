@@ -93,6 +93,9 @@ export class DefaultContextCompiler implements ContextCompiler {
       {
         modelContextTokens: modelMaxContext,
         collapseStore: request.collapseStore,
+        cachedPrefixIds: request.cachedPrefixIds,
+        cacheMetrics: request.lastCacheMetrics,
+        deferBoundaryMarkers: request.deferBoundaryMarkers,
         ...request.compactionOptions,
       },
     );

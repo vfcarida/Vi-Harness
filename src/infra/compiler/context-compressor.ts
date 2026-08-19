@@ -157,6 +157,36 @@ export class ContextCompressor {
       }
 
       // ---------------------------------------------------------------------
+      // CACHE-PRESERVING COMPACTION RULE (Claude Code Prompt Cache Preservation)
+      // If an item is known to be in the provider's active cache prefix, prefer NOT
+      // to modify or prune it (since modification invalidates the entire KV cache).
+      // Instead, compact items that appear AFTER the cached prefix.
+      // ---------------------------------------------------------------------
+      const isCachedPrefix =
+        (options?.cachedPrefixIds
+          ? (options.cachedPrefixIds instanceof Set
+              ? options.cachedPrefixIds.has(obj.id)
+              : (options.cachedPrefixIds as ReadonlyArray<string>).includes(obj.id))
+          : false) ||
+        obj.tags.includes('cached_prefix') ||
+        obj.metadata?.['isCachedPrefix'] === true;
+
+      if (isCachedPrefix && !isOverflow && currentTokens + obj.costTokens <= maxTokens) {
+        retained.push(obj);
+        currentTokens += obj.costTokens;
+        explanations.push({
+          id: obj.id,
+          type: obj.type,
+          action: 'RETAINED',
+          score: scored.score,
+          tokenCost: obj.costTokens,
+          reason: 'Cache-Aware Compaction: Preserved unmodified in provider prompt cache prefix to avoid KV cache invalidation',
+          mustPreserve: false,
+        });
+        continue;
+      }
+
+      // ---------------------------------------------------------------------
       // STAGE 0: BUDGET REDUCTION (Cap per-tool-result token counts)
       // ---------------------------------------------------------------------
       const isToolOutput =

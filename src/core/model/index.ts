@@ -36,6 +36,7 @@ export {
   type ModelResponse,
   FinishReason,
   type TokenUsage,
+  type CacheMetrics,
 } from './model-io.js';
 export * from './router-types.js';
 export * from './context.js';
