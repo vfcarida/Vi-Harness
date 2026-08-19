@@ -46,6 +46,10 @@ import { FrozenMemorySnapshot } from '../infra/memory/frozen-memory-snapshot.js'
 import { SkillExtractor } from '../infra/memory/skill-extractor.js';
 import { SkillCurator } from '../infra/memory/skill-curator.js';
 
+import type { ExperienceStore } from '../infra/telemetry/experience-store.js';
+import { HarnessDiagnosticEngine } from '../infra/telemetry/harness-diagnostic-engine.js';
+import { HarnessAutoTuner } from '../infra/telemetry/harness-auto-tuner.js';
+
 export interface DefaultAgentRuntimeOptions {
   readonly router: ModelRouter;
   readonly compiler: ContextCompiler;
@@ -58,6 +62,7 @@ export interface DefaultAgentRuntimeOptions {
   readonly skillRegistry?: SkillRegistry;
   readonly skillExtractor?: SkillExtractor;
   readonly skillCurator?: SkillCurator;
+  readonly experienceStore?: ExperienceStore;
   readonly idFactory: IdFactory;
   readonly clock: Clock;
 }
@@ -89,6 +94,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
   private readonly skillRegistry?: SkillRegistry;
   private readonly skillExtractor?: SkillExtractor;
   private readonly skillCurator?: SkillCurator;
+  private readonly experienceStore?: ExperienceStore;
   private readonly idFactory: IdFactory;
   private readonly clock: Clock;
 
@@ -107,6 +113,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
     this.skillRegistry = options.skillRegistry;
     this.skillExtractor = options.skillExtractor;
     this.skillCurator = options.skillCurator;
+    this.experienceStore = options.experienceStore;
     this.idFactory = options.idFactory;
     this.clock = options.clock;
   }
@@ -222,6 +229,42 @@ export class DefaultAgentRuntime implements AgentRuntime {
         } catch {
           // Curator is best-effort background work
         }
+      }
+    }
+
+    // Outer-Loop Experience Store: Accumulate traces across runs (Meta-Harness Pattern)
+    const expStore = options?.experienceStore ?? this.experienceStore;
+    if (expStore) {
+      try {
+        await expStore.recordRun({
+          runId: execution.executionId,
+          goalId: goal.id,
+          taskId: task.id,
+          goalDescription: goal.description,
+          executionResult: result,
+          harnessConfig: {
+            architectMode: options?.architectMode,
+            maxAutoCorrectionsPerFile: options?.maxAutoCorrectionsPerFile,
+            autoLintAfterWrite: options?.autoLintAfterWrite,
+            autoTestAfterWrite: options?.autoTestAfterWrite,
+            preserveUserChanges: options?.preserveUserChanges,
+          },
+        });
+
+        // If autoTune enabled, formulate and apply high-confidence recommendations
+        if (options?.autoTune) {
+          const recentTraces = await expStore.getRecentTraces(5);
+          const crossReport = HarnessDiagnosticEngine.analyzeAcrossRuns(recentTraces);
+          if (crossReport.recommendations.length > 0) {
+            await HarnessAutoTuner.applyRecommendations(
+              {},
+              crossReport.recommendations,
+              { experienceStore: expStore, idFactory: this.idFactory },
+            );
+          }
+        }
+      } catch {
+        // Experience store accumulation is best-effort outer loop
       }
     }
 

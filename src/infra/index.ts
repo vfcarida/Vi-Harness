@@ -248,4 +248,23 @@ export type { SkillCuratorOptions, CurationReport } from './memory/skill-curator
 export { DefaultSkillRegistry } from './skills/default-skill-registry.js';
 export { createListSkillsTool, createLoadSkillTool } from './skills/skill-tools.js';
 
+// Meta-Harness Experience Store & Auto-Tuning
+export { DefaultExperienceStore } from './telemetry/experience-store.js';
+export type {
+  ExperienceStore,
+  ExperienceStoreOptions,
+  RunIndexEntry,
+  RunRecord,
+  RecordRunParams,
+  RunTraceData,
+  AutoTuneDecision,
+} from './telemetry/experience-store.js';
+export { HarnessAutoTuner } from './telemetry/harness-auto-tuner.js';
+export type { AutoTuneOptions, AutoTuneResult } from './telemetry/harness-auto-tuner.js';
+export type {
+  RecommendationType,
+  CrossRunAnalysisOptions,
+  CrossRunAnalysisReport,
+} from './telemetry/harness-diagnostic-engine.js';
+
 

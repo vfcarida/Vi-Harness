@@ -179,6 +179,8 @@ export interface ExecutionOptions {
   readonly autoLintAfterWrite?: boolean;
   readonly autoTestAfterWrite?: boolean;
   readonly maxAutoCorrectionsPerFile?: number; // Default 2
+  readonly experienceStore?: import('../../infra/telemetry/experience-store.js').ExperienceStore;
+  readonly autoTune?: boolean;
 }
 
 export interface ExecutionResult {
