@@ -203,4 +203,45 @@ export class McpServer {
       };
     }
   }
+
+  private readonly activeTransports = new Set<import('./transports/types.js').Transport>();
+
+  /**
+   * Bind the MCP server to a transport and start receiving requests.
+   */
+  async listen(transport: import('./transports/types.js').Transport, config?: Record<string, unknown>): Promise<void> {
+    transport.onMessage(async (req) => {
+      return this.handleRequest(req);
+    });
+
+    if (!transport.isRunning) {
+      await transport.start(config);
+    }
+    this.activeTransports.add(transport);
+  }
+
+  /**
+   * Broadcast an MCP notification across all active transports that support notifications.
+   */
+  async broadcastNotification(method: string, params?: unknown): Promise<void> {
+    for (const transport of this.activeTransports) {
+      if (transport.sendNotification) {
+        await transport.sendNotification(method, params);
+      }
+    }
+  }
+
+  /**
+   * Stop all active transports and clean up connections.
+   */
+  async close(): Promise<void> {
+    for (const transport of this.activeTransports) {
+      try {
+        await transport.stop();
+      } catch {
+        // Ignore stop error
+      }
+    }
+    this.activeTransports.clear();
+  }
 }

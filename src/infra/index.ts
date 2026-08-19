@@ -322,4 +322,41 @@ export type {
 export { TerminalTool } from './tools/terminal-tool.js';
 export type { TerminalToolOptions } from './tools/terminal-tool.js';
 
+// MCP Transports & Transport Registry
+export {
+  StdioTransport,
+  HttpTransport,
+} from './mcp/transports/index.js';
+export type {
+  Transport,
+  JsonRpcHandler,
+  StdioTransportOptions,
+  HttpTransportOptions,
+  TransportConfig,
+} from './mcp/transports/index.js';
+export { TransportRegistry } from './mcp/transport-registry.js';
+export type { TransportFactory } from './mcp/transport-registry.js';
+
+// Agent Client Protocol (ACP) Automation Server
+export {
+  AcpServer,
+  AcpHandlers,
+} from './acp/index.js';
+export type {
+  AcpNewSessionParams,
+  AcpNewSessionResult,
+  AcpSendMessageParams,
+  AcpSendMessageResult,
+  AcpSessionStatusParams,
+  AcpSessionStatusResult,
+  AcpCancelSessionParams,
+  AcpCancelSessionResult,
+  AcpSessionHistoryParams,
+  AcpSessionHistoryResult,
+  AcpAgentIdleParams,
+  AcpAgentIdleResult,
+  AcpAgentStatus,
+  AcpHandlerOptions,
+} from './acp/index.js';
+
 
