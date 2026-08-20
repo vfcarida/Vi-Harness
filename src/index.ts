@@ -10,6 +10,9 @@ export * from './core/index.js';
 // Infrastructure
 export * from './infra/index.js';
 
+// Explicit re-exports to resolve barrel overlaps
+export { ParallelToolExecutor } from './core/tools/index.js';
+
 // Dependency Injection
 export * from './di/index.js';
 

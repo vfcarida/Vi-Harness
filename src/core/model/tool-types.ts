@@ -67,14 +67,26 @@ export interface ToolDefinition {
   /** Default execution timeout in milliseconds. */
   readonly defaultTimeoutMs: number;
 
+  /** Concurrency safety classifier (from DSH). Only true opts into parallel execution. */
+  readonly isConcurrencySafe?: (args: unknown) => boolean;
+
+  /** Cooperative timeout budget in milliseconds. */
+  readonly timeoutMs?: number;
+
   /** Permissions required to invoke this tool (e.g. ['fs:read', 'cmd:exec']). */
   readonly requiredPermissions: ReadonlyArray<string>;
 
   /** JSON Schema describing expected input parameters. */
   readonly inputSchema: Readonly<Record<string, unknown>>;
 
+  /** Alias / complement for inputSchema. */
+  readonly parameters?: Readonly<Record<string, unknown>>;
+
   /** Optional JSON Schema describing output structure. */
   readonly outputSchema?: Readonly<Record<string, unknown>>;
+
+  /** Optional direct executor function for DSL tools. */
+  readonly execute?: (args: any, context?: any) => Promise<any> | any;
 }
 
 // ---------------------------------------------------------------------------

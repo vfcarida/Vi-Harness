@@ -31,3 +31,9 @@ export * from './profile/index.js';
 
 // Plugin system
 export * from './plugin/index.js';
+
+// Tools pipeline (Parallel execution, Spill, DSL, Deferred context)
+export * from './tools/index.js';
+
+// Loop hygiene guards (Repeat tool, Timeout policy)
+export * from './guards/index.js';
