@@ -1,11 +1,71 @@
+// Pattern: Built-in Base Capability Bundle (ref: DeepSeek Harness, Cordis)
 /**
- * Base Plugin Bundle for Vi-Harness.
+ * Base Capability Bundle.
  *
- * Defines the standard composed plugin tree and capability seams.
- * DeepSeek Harness reference: "Everything is a Plugin via capability seams".
+ * Provides core capability seams: LLM inference, tools, context compilation,
+ * git management, persistence, and deny-first security.
  */
-import { KNOWN_BUNDLES } from '../infra/profile/profile-manager.js';
-import type { ProfileBundle } from '../core/profile/types.js';
+import type { Bundle } from '../core/plugin/composition.js';
+
+export interface BaseBundleType extends Bundle {
+  readonly defaultSettings?: Record<string, unknown>;
+}
+
+export const BASE_BUNDLE: BaseBundleType = {
+  name: 'base',
+  description: 'Core Vi-Harness runtime engine with all foundational capability seams active',
+  defaultSettings: { maxIterations: 50, safetyBounds: true },
+  plugins: [
+    {
+      id: 'logging-provider',
+      plugin: '@vi-harness/logging-console',
+      config: { level: 'info' },
+    },
+    {
+      id: 'time-provider',
+      plugin: '@vi-harness/time-system',
+    },
+    {
+      id: 'id-factory',
+      plugin: '@vi-harness/id-uuidv7',
+    },
+    {
+      id: 'storage-provider',
+      plugin: '@vi-harness/storage-sqlite',
+      config: { walMode: true },
+    },
+    {
+      id: 'security-policy',
+      plugin: '@vi-harness/security-default-policy',
+      config: { permissionMode: 'ask' },
+    },
+    {
+      id: 'git-manager',
+      plugin: '@vi-harness/git-two-phase',
+    },
+    {
+      id: 'context-compiler',
+      plugin: '@vi-harness/compiler-five-stage',
+      config: { maxTokens: 128000 },
+    },
+    {
+      id: 'tool-registry',
+      plugin: '@vi-harness/tools-default-registry',
+    },
+    {
+      id: 'tool-executor',
+      plugin: '@vi-harness/tools-default-executor',
+    },
+    {
+      id: 'model-router',
+      plugin: '@vi-harness/router-utility',
+    },
+    {
+      id: 'agent-runtime',
+      plugin: '@vi-harness/runtime-default-loop',
+    },
+  ],
+};
 
 export interface CapabilitySeam {
   readonly seam: string;
@@ -51,15 +111,9 @@ export const CAPABILITY_SEAMS: Record<string, CapabilitySeam> = {
   },
 };
 
-export const BASE_BUNDLE: ProfileBundle = {
-  name: 'base',
-  description: KNOWN_BUNDLES.base?.description || 'Core Vi-Harness engine with all capability seams active',
-  defaultSettings: KNOWN_BUNDLES.base?.defaultSettings || { maxIterations: 50, safetyBounds: true },
-};
-
-export function resolvePluginTree(): { seams: Record<string, CapabilitySeam>; bundles: Record<string, unknown> } {
+export function resolvePluginTree(): { seams: Record<string, CapabilitySeam>; bundles: Record<string, Bundle> } {
   return {
     seams: CAPABILITY_SEAMS,
-    bundles: KNOWN_BUNDLES,
+    bundles: { base: BASE_BUNDLE },
   };
 }

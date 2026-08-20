@@ -28,3 +28,6 @@ export * from './session/index.js';
 
 // Profile system
 export * from './profile/index.js';
+
+// Plugin system
+export * from './plugin/index.js';
