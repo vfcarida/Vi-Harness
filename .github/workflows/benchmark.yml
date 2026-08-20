@@ -1,0 +1,60 @@
+name: Benchmark Suite
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6am
+  workflow_dispatch:
+    inputs:
+      tasks:
+        description: 'Comma-separated task IDs (empty = all)'
+        required: false
+        default: ''
+
+jobs:
+  projdevbench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm run bench:projdevbench
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: projdevbench-results
+          path: benchmark-results/projdevbench/
+
+  tbench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm run bench:tbench
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tbench-results
+          path: benchmark-results/tbench/
+
+  report:
+    needs: [projdevbench, tbench]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm run bench:report

@@ -13,17 +13,18 @@
  *   - Container reset (clears singleton cache, useful in tests)
  */
 
+export type Token = symbol | string;
 export type Factory<T> = (container: Container) => T;
 
 export class Container {
-  private readonly factories = new Map<symbol, Factory<unknown>>();
-  private readonly singletons = new Map<symbol, unknown>();
-  private readonly singletonTokens = new Set<symbol>();
+  private readonly factories = new Map<Token, Factory<unknown>>();
+  private readonly singletons = new Map<Token, unknown>();
+  private readonly singletonTokens = new Set<Token>();
 
   /**
    * Register a transient factory — each resolve() creates a new instance.
    */
-  register<T>(token: symbol, factory: Factory<T>): this {
+  register<T>(token: Token, factory: Factory<T>): this {
     this.factories.set(token, factory as Factory<unknown>);
     this.singletonTokens.delete(token);
     this.singletons.delete(token);
@@ -33,7 +34,7 @@ export class Container {
   /**
    * Register a singleton factory — first resolve() creates and caches the instance.
    */
-  registerSingleton<T>(token: symbol, factory: Factory<T>): this {
+  registerSingleton<T>(token: Token, factory: Factory<T>): this {
     this.factories.set(token, factory as Factory<unknown>);
     this.singletonTokens.add(token);
     this.singletons.delete(token); // Clear stale cache
@@ -43,7 +44,7 @@ export class Container {
   /**
    * Register an already-constructed instance as a singleton.
    */
-  registerInstance<T>(token: symbol, instance: T): this {
+  registerInstance<T>(token: Token, instance: T): this {
     this.factories.set(token, () => instance);
     this.singletonTokens.add(token);
     this.singletons.set(token, instance);
@@ -54,7 +55,7 @@ export class Container {
    * Resolve a service by its token.
    * @throws Error if no factory is registered for the token.
    */
-  resolve<T>(token: symbol): T {
+  resolve<T>(token: Token): T {
     // Return cached singleton if available
     if (this.singletonTokens.has(token) && this.singletons.has(token)) {
       return this.singletons.get(token) as T;
@@ -80,7 +81,7 @@ export class Container {
   /**
    * Check whether a token has a registered factory.
    */
-  has(token: symbol): boolean {
+  has(token: Token): boolean {
     return this.factories.has(token);
   }
 

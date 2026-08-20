@@ -67,6 +67,8 @@
     "benchmark:context": "tsx src/cli/context-benchmark-cli.ts",
     "bench:tbench": "tsx src/cli/tbench-eval.ts",
     "bench:projdevbench": "tsx src/cli/projdevbench-eval.ts",
+    "bench:report": "tsx src/cli/benchmark-cli.ts --report-only",
+    "smoke": "tsx scripts/smoke-test.ts",
     "release": "tsx scripts/release.ts",
     "prepublish-check": "tsx scripts/prepublish-check.ts",
     "prepublishOnly": "npm run prepublish-check",

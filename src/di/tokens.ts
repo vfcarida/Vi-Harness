@@ -39,6 +39,20 @@ export const TOKENS = {
   // State
   StateStore: Symbol.for('vi-harness.StateStore'),
 
-  // Runtime
+  // Runtime & Architecture
   AgentRuntime: Symbol.for('vi-harness.AgentRuntime'),
+  ArchitectMode: Symbol.for('vi-harness.ArchitectMode'),
+
+  // Synthesis Modules & Subsystems
+  Compaction: Symbol.for('vi-harness.Compaction'),
+  CacheCompaction: Symbol.for('vi-harness.CacheCompaction'),
+  RepoMap: Symbol.for('vi-harness.RepoMap'),
+  GitManager: Symbol.for('vi-harness.GitManager'),
+  GoalBudgets: Symbol.for('vi-harness.GoalBudgets'),
+  MemoryManager: Symbol.for('vi-harness.MemoryManager'),
+  SessionStore: Symbol.for('vi-harness.SessionStore'),
+  ExperienceStore: Symbol.for('vi-harness.ExperienceStore'),
+  McpTransport: Symbol.for('vi-harness.McpTransport'),
+  Storage: Symbol.for('vi-harness.Storage'),
+  MetricsSink: Symbol.for('vi-harness.MetricsSink'),
 } as const;
