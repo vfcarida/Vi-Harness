@@ -1,3 +1,4 @@
+// Pattern: Outer-loop experience store (ref: Meta-Harness)
 /**
  * Experience Store (Meta-Harness Outer-Loop Accumulation).
  *

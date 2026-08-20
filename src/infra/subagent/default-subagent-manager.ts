@@ -1,3 +1,4 @@
+// Pattern: Recursive subagents with context isolation (ref: Prime Agent)
 /**
  * Default Subagent Manager.
  *

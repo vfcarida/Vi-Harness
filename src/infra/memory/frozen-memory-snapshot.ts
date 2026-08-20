@@ -1,3 +1,4 @@
+// Pattern: Frozen memory snapshot (ref: Hermes)
 /**
  * Frozen Memory Snapshot (from Hermes).
  *

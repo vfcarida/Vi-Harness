@@ -1,3 +1,4 @@
+// Pattern: 5-stage compaction pipeline (ref: Claude Code)
 /**
  * Multi-Tier Progressive Context Compressor (Claude Code & DeepSeek Harness inspired).
  *

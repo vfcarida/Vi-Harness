@@ -1,3 +1,4 @@
+// Pattern: Concurrency safety classification & parallel tool execution (ref: DeepSeek Harness)
 /**
  * Parallel Safe Tool Executor.
  *

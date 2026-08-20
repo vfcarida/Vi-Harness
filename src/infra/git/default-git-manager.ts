@@ -1,3 +1,4 @@
+// Pattern: Two-phase git commits (ref: Aider)
 /**
  * Default Git Manager (In-Memory Simulation for Unit Testing).
  *

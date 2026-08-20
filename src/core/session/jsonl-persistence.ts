@@ -1,3 +1,4 @@
+// Pattern: Tree-structured session JSONL persistence (ref: Pi)
 /**
  * JSONL Session Persistence (from DeepSeek Harness & Pi).
  *

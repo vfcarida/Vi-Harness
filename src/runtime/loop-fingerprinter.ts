@@ -1,3 +1,4 @@
+// Pattern: Loop-hygiene guards & repeat detection (ref: DeepSeek Harness)
 /**
  * Loop Fingerprinting & Oscillation Detector.
  *

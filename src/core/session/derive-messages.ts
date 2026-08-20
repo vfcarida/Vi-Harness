@@ -1,3 +1,4 @@
+// Pattern: Event-sourced session history derivation (ref: DeepSeek Harness)
 /**
  * Derived History Projection (from DeepSeek Harness & Pi).
  *

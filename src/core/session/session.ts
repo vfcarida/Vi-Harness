@@ -1,3 +1,4 @@
+// Pattern: Tree-structured sessions (ref: Pi)
 /**
  * Session Domain Entity (from DeepSeek Harness & Pi).
  *

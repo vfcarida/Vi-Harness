@@ -1,3 +1,4 @@
+// Pattern: Two-phase git commits & safe rollback (ref: Aider)
 /**
  * Real Git Manager.
  *

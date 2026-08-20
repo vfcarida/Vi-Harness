@@ -1,3 +1,4 @@
+// Pattern: Agent Client Protocol (ACP) (ref: DeepSeek Harness)
 /**
  * Agent Client Protocol (ACP) Automation Server.
  *

@@ -1,3 +1,4 @@
+// Pattern: Architect mode (ref: Aider + Prime Agent)
 /**
  * Architect Executor (Dual-Model Plan -> Execute Split).
  *

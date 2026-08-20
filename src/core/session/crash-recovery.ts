@@ -1,3 +1,4 @@
+// Pattern: Crash recovery via orphaned-lock detection (ref: DeepSeek Harness)
 /**
  * Crash Recovery (from DeepSeek Harness).
  *

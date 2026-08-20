@@ -1,3 +1,4 @@
+// Pattern: PageRank repo map (ref: Aider)
 /**
  * Source Code Indexer & Symbol Map Generator.
  *

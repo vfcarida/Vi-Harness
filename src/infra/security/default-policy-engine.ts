@@ -1,3 +1,4 @@
+// Pattern: 7-layer security perimeter (ref: Claude Code)
 /**
  * Default Policy Engine.
  *

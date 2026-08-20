@@ -1,3 +1,4 @@
+// Pattern: Outer-loop harness diagnostic engine (ref: Meta-Harness)
 /**
  * Harness Diagnostic Engine (Meta-Harness Outer-Loop Adaptation).
  *

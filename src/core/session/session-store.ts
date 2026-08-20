@@ -1,3 +1,4 @@
+// Pattern: Tree-structured session store (ref: Pi)
 /**
  * Session Store (from Pi & DeepSeek Harness).
  *

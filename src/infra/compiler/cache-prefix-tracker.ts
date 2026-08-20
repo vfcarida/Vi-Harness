@@ -1,3 +1,4 @@
+// Pattern: Cache-aware compaction & prefix tracking (ref: Claude Code)
 /**
  * Cache Prefix Tracker (Claude Code & Anthropic/OpenAI prompt cache integration).
  *

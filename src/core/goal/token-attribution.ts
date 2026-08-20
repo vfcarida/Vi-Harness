@@ -1,3 +1,4 @@
+// Pattern: Goal budgets & token attribution (ref: Prime Agent)
 /**
  * Subagent Token Attribution & Hierarchical Tree (from Prime Agent).
  *

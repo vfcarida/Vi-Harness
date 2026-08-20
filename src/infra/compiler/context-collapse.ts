@@ -1,3 +1,4 @@
+// Pattern: Context Collapse virtual projection (ref: Claude Code)
 /**
  * Context Collapse — Read-Time Virtual Projection.
  *

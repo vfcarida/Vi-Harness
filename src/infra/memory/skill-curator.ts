@@ -1,3 +1,4 @@
+// Pattern: Background self-improvement & curator lifecycle (ref: Hermes)
 /**
  * Skill & Pattern Curator Lifecycle (from Hermes).
  *

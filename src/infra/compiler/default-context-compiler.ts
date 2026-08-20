@@ -1,3 +1,4 @@
+// Pattern: 5-stage progressive context compilation (ref: Claude Code)
 /**
  * Default Model-Aware Context Compiler.
  *

@@ -1,3 +1,4 @@
+// Pattern: Background self-improvement & skill extraction (ref: Hermes)
 /**
  * Background Skill Extractor (from Hermes Self-Improvement).
  *

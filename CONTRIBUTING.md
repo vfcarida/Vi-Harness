@@ -1,143 +1,254 @@
 # Contributing to Vi-Harness
 
-Thank you for considering a contribution. This document explains how to set up the development environment, the conventions we follow, and the process for getting a change merged.
+Thank you for your interest in contributing to **Vi-Harness**! 
+
+Vi-Harness is an open-source coding agent harness built by studying, synthesizing, and improving upon proven patterns from leading reference systems (Claude Code, Aider, Prime Agent, Hermes, Pi, Meta-Harness, and DeepSeek Harness). We welcome community contributions of all kinds — from bug fixes and documentation improvements to new tools, transports, and model providers.
 
 ---
 
 ## Table of Contents
 
-- [Development Setup](#development-setup)
-- [Repository Structure](#repository-structure)
-- [Architecture Contract](#architecture-contract)
-- [Making Changes](#making-changes)
-- [Testing](#testing)
-- [Commit Messages](#commit-messages)
-- [Pull Request Process](#pull-request-process)
-- [Reporting Security Issues](#reporting-security-issues)
+1. [Development Environment Setup](#development-environment-setup)
+2. [Running Tests & Verification](#running-tests--verification)
+3. [Code Style & Quality](#code-style--quality)
+4. [Commit Message Format](#commit-message-format)
+5. [Pull Request Process](#pull-request-process)
+6. [Architecture Overview](#architecture-overview)
+7. [Extending Vi-Harness](#extending-vi-harness)
+   - [Adding a New Tool](#adding-a-new-tool)
+   - [Adding a New MCP Transport](#adding-a-new-mcp-transport)
+   - [Adding a New Model Provider](#adding-a-new-model-provider)
+8. [Reporting Security Issues](#reporting-security-issues)
 
 ---
 
-## Development Setup
+## Development Environment Setup
 
-**Requirements:** Node.js ≥ 20 (22 recommended), Git.
+### Prerequisites
+- **Node.js**: `>= 20.0.0` (v22 LTS recommended)
+- **npm**: `>= 10.0.0`
+- **Git**: `>= 2.30.0`
+
+### Initial Setup
 
 ```bash
-# 1. Fork and clone
-git clone https://github.com/<your-fork>/Vi-Harness.git
-cd Vi-Harness
+# 1. Clone the repository
+git clone https://github.com/vi-harness/vi-harness.git
+cd vi-harness
 
-# 2. Install dependencies (exact lockfile)
+# 2. Install dependencies (using exact lockfile)
 npm ci
 
-# 3. Verify the baseline
+# 3. Verify baseline build and test passes
 npm run typecheck
 npm run lint
 npm test
 ```
 
-All CI checks must pass on your branch before a PR is reviewed.
+---
+
+## Running Tests & Verification
+
+Vi-Harness maintains strict test coverage across unit, integration, and live suites.
+
+```bash
+# Run all unit and integration tests
+npm test
+
+# Run unit tests only (fast, no network, no secrets)
+npm run test:unit
+
+# Run integration tests (mocked providers, real Git / SQLite)
+npm run test:integration
+
+# Run live provider tests (requires API keys; opt-in only)
+npm run test:live
+
+# Run test coverage report
+npm run test:coverage
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+### Testing Invariants
+- **Unit tests require no external network or API secrets.** Mock all external I/O.
+- **Integration tests clean up after themselves.** Temporary workspaces and SQLite databases must use sandbox directories and be cleanly deleted after test runs.
+- **All security changes must include regression tests** under `tests/unit/security/`.
 
 ---
 
-## Repository Structure
+## Code Style & Quality
 
+We enforce strict TypeScript typing, ESLint rules, and Prettier formatting.
+
+```bash
+# Check TypeScript compilation without emitting files
+npm run typecheck
+
+# Check code formatting with Prettier
+npm run format:check
+
+# Auto-format codebase
+npm run format
+
+# Run ESLint across src/ and tests/
+npm run lint
 ```
-src/
-├── core/          # Domain layer — ZERO external dependencies
-├── infra/         # Infrastructure — implements core interfaces
-├── di/            # Dependency injection wiring
-├── runtime/       # Agent execution loop
-└── index.ts       # Public API
 
-tests/
-├── unit/          # Pure unit tests — no secrets, no network
-└── integration/   # Integration tests — mocked model calls, real Git
-```
-
-**Strict dependency rule:** arrows flow inward only — `runtime → infra → core`. The `core/` package must never import from `infra/` or `runtime/`.
+### Guidelines
+- **Strict TypeScript**: Avoid `any` where possible. Use explicit interface contracts.
+- **Reference Attribution**: When implementing or porting a pattern from a reference architecture (Claude Code, Aider, Hermes, Pi, Prime Agent, Meta-Harness, DeepSeek Harness), add a one-line module-level comment at the top of the file:
+  ```typescript
+  // Pattern: 5-stage compaction pipeline (ref: Claude Code)
+  ```
+- **Error Handling**: Throw typed domain errors inheriting from `BaseError` in `src/core/errors/`.
 
 ---
 
-## Architecture Contract
+## Commit Message Format
 
-Before making structural changes, read [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) and the relevant ADRs in [`docs/architecture/adr/`](docs/architecture/adr/).
-
-Key invariants:
-
-1. **Core has zero external dependencies.** `core/` imports only from Node.js built-ins and the project's own `core/` subtrees.
-2. **All interfaces live in `core/interfaces/`.** Infrastructure provides implementations; nothing binds directly to implementations.
-3. **Unit tests require no secrets or network access.** If your test needs an API key to pass it belongs in `tests/live/` and is opt-in only.
-4. **Security mitigations must be tested.** Every change to `src/infra/security/` must include or update a test in `tests/unit/security/`.
-
----
-
-## Making Changes
-
-1. **Open an issue first** for non-trivial changes so the approach can be agreed on before you invest time writing code.
-2. Create a feature branch from `main`:
-   ```bash
-   git checkout -b feat/my-feature
-   ```
-3. Keep each commit focused. Mixing refactors with features makes review harder.
-4. Run the full check suite before pushing:
-   ```bash
-   npm run typecheck
-   npm run lint
-   npm test
-   npm run build
-   ```
-
----
-
-## Testing
-
-| Test suite | Command | Notes |
-|---|---|---|
-| Unit | `npx vitest run tests/unit` | No secrets, no network |
-| Integration | `npx vitest run tests/integration` | Mocked models, real Git |
-| Live providers | `npx vitest run tests/live` | Requires secrets — opt-in only |
-| Coverage | `npm run test:coverage` | Reports in `coverage/` |
-
-Tests in `tests/unit/` and `tests/integration/` must pass on CI with **no environment secrets**. If a test requires a real API key it must live in `tests/live/` and must check for the `LIVE_PROVIDER_TESTS=true` environment variable before running.
-
----
-
-## Commit Messages
-
-We follow [Conventional Commits](https://www.conventionalcommits.org/):
+We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
 ```
-<type>(<optional scope>): <short summary>
+<type>(<optional scope>): <description>
 
-<optional body>
+[optional body]
 
-<optional footer>
+[optional footer(s)]
 ```
 
-Common types: `feat`, `fix`, `test`, `refactor`, `docs`, `chore`, `security`.
+### Allowed Types
+- `feat`: A new feature or capability
+- `fix`: A bug fix
+- `docs`: Documentation updates or additions
+- `refactor`: Code restructuring without changing external behavior
+- `test`: Adding or updating test suites
+- `perf`: Performance optimizations
+- `security`: Security patches, policy rules, or perimeter hardening
+- `chore`: Build scripts, dependencies, or toolchain maintenance
 
-Examples:
-```
-feat(context-compiler): add L0_HOT invariant pinning for security rules
-fix(path-validator): reject null-byte sequences in URI-encoded paths
-security(command-sanitizer): block printenv and env exfiltration commands
-test(red-team-suite): add regression tests for approval spoofing vector
+### Examples
+```bash
+feat(compiler): implement cache-aware token pruning for prefix optimization
+fix(security): sanitize path traversal in workspace file resolver
+docs(readme): add deepseek harness architectural reference attribution
+test(session): add session tree branching recovery test
 ```
 
 ---
 
 ## Pull Request Process
 
-1. All CI checks must pass (typecheck, lint, unit tests, build).
-2. For changes to `src/core/`, `src/infra/security/`, `.github/workflows/`, or `package.json`, a review from a CODEOWNER is required before merge.
-3. Keep the PR description concise: **what changed, why, and what you tested**.
-4. PRs that add functionality must include tests. PRs that fix bugs must include a regression test.
-5. Squash-merge is preferred for feature branches. Merge commits are used for release branches.
+1. **Create a Feature Branch**:
+   ```bash
+   git checkout -b feat/my-new-feature
+   ```
+2. **Implement & Test**: Ensure all tests pass (`npm test`) and typechecks succeed (`npm run typecheck`).
+3. **Commit Cleanly**: Use Conventional Commits format.
+4. **Push & Open PR**:
+   - Provide a clear summary of what changed and why.
+   - Reference any relevant issues or reference patterns.
+   - Confirm CI passes all automated checks.
+5. **Code Review**: PRs touching `src/core/` or `src/infra/security/` require explicit maintainer review.
+
+---
+
+## Architecture Overview
+
+Vi-Harness enforces a strict **inward dependency contract**:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                       CLI Layer                         │
+├─────────────────────────────────────────────────────────┤
+│                     Runtime Layer                       │
+│    (iteration loop, state machine, architect mode)      │
+├─────────────────────────────────────────────────────────┤
+│                  Infrastructure Layer                   │
+│   (MCP, SQLite storage, security sandbox, compilers)    │
+├─────────────────────────────────────────────────────────┤
+│                      Core Layer                         │
+│       (domain entities, interfaces, zero dependencies)  │
+└─────────────────────────────────────────────────────────┘
+```
+
+- **`src/core/`**: Zero external dependencies. Contains pure domain logic, entities, and interface contracts.
+- **`src/infra/`**: Infrastructure implementations (SQLite storage, MCP transports, security perimeter, model clients).
+- **`src/runtime/`**: Agent execution loop, state machine orchestrator, tool validators, and architect execution.
+- **`src/cli/`**: Command-line entrypoints, benchmark runners, and TUI dashboards.
+
+---
+
+## Extending Vi-Harness
+
+### Adding a New Tool
+
+1. Define the tool inputs/outputs and register using `ToolDefinition`:
+   ```typescript
+   import type { ToolDefinition, ToolExecutionContext, ToolResult } from './core/interfaces/tool.js';
+
+   export const myCustomTool: ToolDefinition = {
+     name: 'my_custom_tool',
+     description: 'Performs a custom operation on the workspace',
+     parameters: {
+       type: 'object',
+       properties: {
+         target: { type: 'string', description: 'Target path or identifier' },
+       },
+       required: ['target'],
+     },
+     async execute(args: { target: string }, context: ToolExecutionContext): Promise<ToolResult> {
+       // Implementation with safety checks
+       return { success: true, output: `Processed ${args.target}` };
+     },
+   };
+   ```
+2. Register the tool in `DefaultToolRegistry` (`src/infra/tools/default-tool-registry.ts`).
+3. Add security validation rules in `src/infra/security/` if the tool interacts with the filesystem or executes processes.
+
+### Adding a New MCP Transport
+
+1. Implement the `McpTransport` interface from `src/core/interfaces/mcp-transport.ts`:
+   ```typescript
+   import type { McpTransport, McpMessage } from '../../core/interfaces/mcp-transport.js';
+
+   export class CustomMcpTransport implements McpTransport {
+     readonly type = 'custom';
+
+     async connect(): Promise<void> { /* ... */ }
+     async send(message: McpMessage): Promise<void> { /* ... */ }
+     async close(): Promise<void> { /* ... */ }
+   }
+   ```
+2. Register the transport in `TransportRegistry` (`src/infra/mcp/transport-registry.ts`).
+3. Add unit and integration tests under `tests/unit/mcp/` and `tests/integration/mcp-transports-e2e.test.ts`.
+
+### Adding a New Model Provider
+
+1. Implement the `ModelProvider` interface from `src/core/interfaces/model-provider.ts`:
+   ```typescript
+   import type { ModelProvider, ModelRequest, ModelResponse } from '../../core/interfaces/model-provider.js';
+
+   export class CustomProvider implements ModelProvider {
+     readonly providerId = 'custom-provider';
+
+     async generate(request: ModelRequest): Promise<ModelResponse> {
+       // Transform request, call API, parse response into ModelResponse format
+     }
+
+     async stream(request: ModelRequest, onChunk: (chunk: string) => void): Promise<ModelResponse> {
+       // Streaming implementation
+     }
+   }
+   ```
+2. Register the provider in `ModelRouter` (`src/infra/router/`) and dependency injection container (`src/di/`).
+3. Add tests verifying request serialization, token usage tracking, and fault tolerance.
 
 ---
 
 ## Reporting Security Issues
 
-**Do not open a public issue for security vulnerabilities.**
+Please do not report security vulnerabilities via public GitHub issues.
 
-See [SECURITY.md](SECURITY.md) for the responsible disclosure process.
+Review our [Security Policy](SECURITY.md) for responsible disclosure guidelines.
