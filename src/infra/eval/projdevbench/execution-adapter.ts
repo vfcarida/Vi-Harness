@@ -24,20 +24,18 @@ import { ErrorCode, ErrorCategory } from '../../../core/errors/error-codes.js';
 export interface ProjDevExecutionAdapterOptions {
   readonly runtime: AgentRuntime;
   readonly idFactory: IdFactory;
-  readonly clock: Clock;
+  readonly clock?: Clock;
   readonly evaluator?: ProjDevEvaluator;
 }
 
 export class ProjDevExecutionAdapter {
   private readonly runtime: AgentRuntime;
   private readonly idFactory: IdFactory;
-  private readonly clock: Clock;
   private readonly evaluator: ProjDevEvaluator;
 
   constructor(options: ProjDevExecutionAdapterOptions) {
     this.runtime = options.runtime;
     this.idFactory = options.idFactory;
-    this.clock = options.clock;
     this.evaluator = options.evaluator ?? new ProjDevEvaluator();
   }
 
@@ -241,12 +239,10 @@ export class ProjDevExecutionAdapter {
 
     // Execute agent loop
     let result;
-    let error: Error | null = null;
 
     try {
       result = await this.runtime.execute(goal, runtimeOptions);
     } catch (err: any) {
-      error = err;
       result = {
         executionId: this.idFactory.create<'Execution'>(),
         goalId: goal.id,

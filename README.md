@@ -17,7 +17,7 @@
 
 **The world's best open-source coding agent harness — built by studying, synthesizing, and improving upon the best patterns in the field.**
 
-[![CI / Tests](https://img.shields.io/badge/Tests-1022%20Passing%20(150%20Files)-brightgreen.svg?style=for-the-badge&logo=vitest)](https://github.com/vfcarida/Vi-Harness)
+[![CI / Tests](https://img.shields.io/badge/Tests-1042%20Passing%20(159%20Files)-brightgreen.svg?style=for-the-badge&logo=vitest)](https://github.com/vfcarida/Vi-Harness/actions)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%205.8-blue.svg?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20.0.0-green.svg?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 [![MCP Protocol](https://img.shields.io/badge/MCP-Compliant%20v2024--11-purple.svg?style=for-the-badge)](https://modelcontextprotocol.io/)

@@ -9,9 +9,6 @@ import { DefaultAgentRuntime, type DefaultAgentRuntimeOptions } from './default-
 import { UuidV7IdFactory } from '../infra/id/uuid-id-factory.js';
 import { SystemClock } from '../infra/time/system-clock.js';
 import { UtilityModelRouter } from '../infra/router/utility-model-router.js';
-import { CapabilityMatcher } from '../infra/router/capability-matcher.js';
-import { ModelHealthRegistry } from '../infra/router/health-registry.js';
-import { CostPolicy } from '../infra/router/cost-policy.js';
 import { MockModelProvider } from '../infra/model/mock-model-provider.js';
 import { DefaultContextCompiler } from '../infra/compiler/default-context-compiler.js';
 import { ProfileLoader } from '../infra/profile/profile-loader.js';

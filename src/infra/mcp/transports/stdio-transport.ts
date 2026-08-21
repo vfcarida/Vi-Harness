@@ -13,7 +13,6 @@ export class StdioTransport implements Transport {
   private messageHandler?: JsonRpcHandler;
   private readonly inStream: NodeJS.ReadableStream;
   private readonly outStream: NodeJS.WritableStream;
-  private readonly errStream: NodeJS.WritableStream;
   private readonly maxLineLength: number;
   private buffer = '';
   private activeRequestCount = 0;
@@ -23,12 +22,15 @@ export class StdioTransport implements Transport {
   constructor(options?: StdioTransportOptions) {
     this.inStream = options?.inStream ?? process.stdin;
     this.outStream = options?.outStream ?? process.stdout;
-    this.errStream = options?.errStream ?? process.stderr;
     this.maxLineLength = options?.maxLineLength ?? 10 * 1024 * 1024; // 10MB default
   }
 
   get isRunning(): boolean {
     return this.running;
+  }
+
+  get isDrainingStream(): boolean {
+    return this.isDraining;
   }
 
   onMessage(handler: JsonRpcHandler): void {

@@ -23,11 +23,9 @@ import type { AgentRuntime } from '../../core/interfaces/agent-runtime.js';
 import type { IdFactory } from '../../core/types/identifiers.js';
 import type { Clock } from '../../core/interfaces/clock.js';
 import { DefaultSession } from '../../core/session/session.js';
-import type { SqliteSessionStore } from '../storage/session-store.js';
 import type { Goal } from '../../core/model/goal.js';
 import { GoalStatus, DEFAULT_GOAL_CONSTRAINTS } from '../../core/model/goal.js';
-import type { ExecutionId, SessionId } from '../../core/types/identifiers.js';
-import type { SessionEvent } from '../../core/session/session-event.js';
+import type { ExecutionId } from '../../core/types/identifiers.js';
 
 interface AcpSessionRecord {
   readonly sessionId: string;
@@ -46,21 +44,18 @@ export interface AcpHandlerOptions {
   readonly runtime: AgentRuntime;
   readonly idFactory: IdFactory;
   readonly clock: Clock;
-  readonly sessionStore?: SqliteSessionStore;
 }
 
 export class AcpHandlers {
   private readonly runtime: AgentRuntime;
   private readonly idFactory: IdFactory;
   private readonly clock: Clock;
-  private readonly sessionStore?: SqliteSessionStore;
   private readonly sessions = new Map<string, AcpSessionRecord>();
 
   constructor(options: AcpHandlerOptions) {
     this.runtime = options.runtime;
     this.idFactory = options.idFactory;
     this.clock = options.clock;
-    this.sessionStore = options.sessionStore as SqliteSessionStore;
   }
 
   async handleNewSession(params?: AcpNewSessionParams): Promise<AcpNewSessionResult> {

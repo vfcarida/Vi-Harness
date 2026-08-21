@@ -20,7 +20,10 @@ export class AuditIntegritySigner {
   private readonly keyId: string;
 
   constructor(options?: { secretKey?: string; keyId?: string }) {
-    this.secretKey = options?.secretKey ?? 'vi-harness-default-enterprise-audit-key';
+    this.secretKey =
+      options?.secretKey ??
+      process.env['VI_HARNESS_AUDIT_KEY'] ??
+      crypto.randomBytes(32).toString('hex');
     this.keyId = options?.keyId ?? 'key-v1';
   }
 

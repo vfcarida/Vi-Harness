@@ -19,7 +19,6 @@ import { MockModelProvider } from '../../infra/model/mock-model-provider.js';
 import { UuidV7IdFactory } from '../../infra/id/uuid-id-factory.js';
 import { SystemClock } from '../../infra/time/system-clock.js';
 import { UtilityModelRouter } from '../../infra/router/utility-model-router.js';
-import { ProviderHealthStatus } from '../../core/index.js';
 
 export interface AcpCliArgs {
   transport: 'stdio' | 'http';

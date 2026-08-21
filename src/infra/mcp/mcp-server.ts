@@ -15,12 +15,16 @@ import type {
   McpCallToolResult,
 } from './mcp-types.js';
 
+import type { IdFactory } from '../../core/types/identifiers.js';
+import { UuidV7IdFactory } from '../id/uuid-id-factory.js';
+
 export interface McpServerOptions {
   readonly serverName?: string;
   readonly serverVersion?: string;
   readonly toolRegistry: ToolRegistry;
   readonly toolExecutor?: ToolExecutor;
   readonly contextStore?: ContextStore;
+  readonly idFactory?: IdFactory;
 }
 
 export class McpServer {
@@ -29,6 +33,7 @@ export class McpServer {
   readonly toolRegistry: ToolRegistry;
   readonly toolExecutor?: ToolExecutor;
   readonly contextStore?: ContextStore;
+  private readonly idFactory: IdFactory;
 
   constructor(options: McpServerOptions) {
     this.serverName = options.serverName ?? 'vi-harness-mcp-server';
@@ -36,6 +41,7 @@ export class McpServer {
     this.toolRegistry = options.toolRegistry;
     this.toolExecutor = options.toolExecutor;
     this.contextStore = options.contextStore;
+    this.idFactory = options.idFactory ?? new UuidV7IdFactory();
   }
 
   /**
@@ -116,7 +122,7 @@ export class McpServer {
 
           try {
             const executionResult = await tool.execute(toolInput, {
-              correlationId: `mcp_call_${Date.now()}`,
+              correlationId: this.idFactory.create<'ToolCall'>(),
             });
             return {
               jsonrpc: '2.0',

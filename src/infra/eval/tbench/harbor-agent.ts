@@ -23,20 +23,18 @@ export interface TerminalConnection {
 export interface ViHarnessHarborAgentOptions {
   readonly runtime: AgentRuntime;
   readonly idFactory: IdFactory;
-  readonly clock: Clock;
+  readonly clock?: Clock;
   readonly dockerEnv?: DockerEnvironment;
 }
 
 export class ViHarnessHarborAgent {
   public readonly runtime: AgentRuntime;
   private readonly idFactory: IdFactory;
-  private readonly clock: Clock;
   private readonly dockerEnv?: DockerEnvironment;
 
   constructor(options: ViHarnessHarborAgentOptions) {
     this.runtime = options.runtime;
     this.idFactory = options.idFactory;
-    this.clock = options.clock;
     this.dockerEnv = options.dockerEnv;
   }
 

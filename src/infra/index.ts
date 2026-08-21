@@ -15,6 +15,8 @@ export { TestClock } from './time/test-clock.js';
 // Config
 export { EnvConfiguration } from './config/env-configuration.js';
 export type { EnvConfigurationOptions } from './config/env-configuration.js';
+export { ConfigSchemaValidator, RuntimeConfigSchema } from './config/config-schema.js';
+export type { RuntimeConfig } from './config/config-schema.js';
 
 // Model Providers & Resilience
 export { MockModelProvider } from './model/mock-model-provider.js';
@@ -25,6 +27,12 @@ export type { FailingModelProviderOptions } from './model/failing-model-provider
 
 export { OpenAICompatibleProvider } from './model/openai-compatible-provider.js';
 export type { OpenAICompatibleProviderOptions } from './model/openai-compatible-provider.js';
+
+export { AnthropicModelProvider } from './model/anthropic-provider.js';
+export type { AnthropicProviderOptions } from './model/anthropic-provider.js';
+
+export { GeminiModelProvider } from './model/gemini-provider.js';
+export type { GeminiProviderOptions } from './model/gemini-provider.js';
 
 export {
   executeResiliently,
@@ -38,6 +46,14 @@ export { ProviderMessageAdapter } from './model/provider-message-adapter.js';
 export type { AnthropicMessage, AnthropicPayload, AnthropicToolUseBlock, AnthropicToolResultBlock } from './model/provider-message-adapter.js';
 export { SimulatedFaultModelProvider } from './model/simulated-fault-model-provider.js';
 export type { SimulatedFaultType, SimulatedFaultProviderOptions } from './model/simulated-fault-model-provider.js';
+export { StructuredOutputValidator } from './model/structured-output-validator.js';
+export type { StructuredValidationResult, StructuredValidationSuccess, StructuredValidationFailure } from './model/structured-output-validator.js';
+export { CircuitBreaker } from './model/circuit-breaker.js';
+export type { CircuitBreakerOptions, CircuitState } from './model/circuit-breaker.js';
+
+// Telemetry & OTLP
+export { OtlpTelemetryExporter } from './telemetry/otlp-telemetry-exporter.js';
+export type { OtlpExporterOptions } from './telemetry/otlp-telemetry-exporter.js';
 
 // Metrics
 export { InMemoryMetricsCollector } from './metrics/in-memory-metrics-collector.js';
@@ -145,6 +161,8 @@ export { DefaultStateStore } from './persistence/default-state-store.js';
 export type { DefaultStateStoreOptions } from './persistence/default-state-store.js';
 export { DefaultEventStore } from './persistence/default-event-store.js';
 export type { DefaultEventStoreOptions } from './persistence/default-event-store.js';
+export { JsonlEventStore } from './persistence/jsonl-event-store.js';
+export type { JsonlEventStoreOptions } from './persistence/jsonl-event-store.js';
 export { DefaultExecutionJournal } from './persistence/default-execution-journal.js';
 export type { DefaultExecutionJournalOptions } from './persistence/default-execution-journal.js';
 export { DefaultRecoveryManager } from './persistence/default-recovery-manager.js';

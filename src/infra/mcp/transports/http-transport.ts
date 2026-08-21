@@ -8,7 +8,7 @@
  */
 import * as http from 'node:http';
 import type { Transport, HttpTransportOptions, JsonRpcHandler } from './types.js';
-import type { McpJsonRpcRequest, McpJsonRpcResponse } from '../mcp-types.js';
+import type { McpJsonRpcRequest } from '../mcp-types.js';
 
 interface RateLimitBucket {
   tokens: number;
@@ -73,6 +73,7 @@ export class HttpTransport implements Transport {
     this.server = http.createServer((req, res) => {
       this.handleHttpRequest(req, res);
     });
+    this.server.timeout = this.idleTimeoutMs;
 
     this.server.on('connection', () => {
       this.activeConnectionCount++;

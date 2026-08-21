@@ -17,7 +17,6 @@ import { ReadFileTool } from '../../infra/tools/builtin/read-file-tool.js';
 import { ListDirectoryTool } from '../../infra/tools/builtin/list-directory-tool.js';
 import { RunCommandTool } from '../../infra/tools/builtin/run-command-tool.js';
 import { UuidV7IdFactory } from '../../infra/id/uuid-id-factory.js';
-import { SystemClock } from '../../infra/time/system-clock.js';
 
 export interface McpCliArgs {
   transport: 'stdio' | 'http';
@@ -72,7 +71,6 @@ Usage:
   }
 
   const idFactory = new UuidV7IdFactory();
-  const clock = new SystemClock();
 
   // Setup Tool Registry with standard builtin tools
   const toolRegistry = new DefaultToolRegistry();

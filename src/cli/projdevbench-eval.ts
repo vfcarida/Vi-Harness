@@ -16,7 +16,6 @@
  *   --help, -h                Display help message
  */
 import * as path from 'node:path';
-import * as fs from 'node:fs';
 import {
   ProjDevTaskLoader,
   ProjDevWorkspaceManager,
@@ -36,7 +35,6 @@ import { MockModelProvider } from '../infra/model/mock-model-provider.js';
 import { UuidV7IdFactory } from '../infra/id/uuid-id-factory.js';
 import { SystemClock } from '../infra/time/system-clock.js';
 import { UtilityModelRouter } from '../infra/router/utility-model-router.js';
-import { ProviderHealthStatus, ModelRole } from '../core/index.js';
 
 interface CliArgs {
   problemsDir: string;

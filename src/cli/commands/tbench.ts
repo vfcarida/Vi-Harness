@@ -7,7 +7,6 @@
  *   npx tsx src/cli/commands/tbench.ts [options]
  */
 import * as path from 'node:path';
-import * as fs from 'node:fs';
 import {
   TBenchRunner,
   TBenchReportGenerator,
@@ -23,7 +22,6 @@ import { MockModelProvider } from '../../infra/model/mock-model-provider.js';
 import { UuidV7IdFactory } from '../../infra/id/uuid-id-factory.js';
 import { SystemClock } from '../../infra/time/system-clock.js';
 import { UtilityModelRouter } from '../../infra/router/utility-model-router.js';
-import { ProviderHealthStatus } from '../../core/index.js';
 
 export interface TBenchCliArgs {
   tasksDir: string;

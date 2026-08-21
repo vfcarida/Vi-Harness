@@ -43,6 +43,11 @@ export const TOKENS = {
   AgentRuntime: Symbol.for('vi-harness.AgentRuntime'),
   ArchitectMode: Symbol.for('vi-harness.ArchitectMode'),
 
+  // Model Providers & Exporters
+  AnthropicProvider: Symbol.for('vi-harness.AnthropicProvider'),
+  GeminiProvider: Symbol.for('vi-harness.GeminiProvider'),
+  OtlpExporter: Symbol.for('vi-harness.OtlpExporter'),
+
   // Synthesis Modules & Subsystems
   Compaction: Symbol.for('vi-harness.Compaction'),
   CacheCompaction: Symbol.for('vi-harness.CacheCompaction'),

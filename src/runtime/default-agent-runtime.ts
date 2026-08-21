@@ -49,10 +49,13 @@ import { SkillCurator } from '../infra/memory/skill-curator.js';
 import type { ExperienceStore } from '../infra/telemetry/experience-store.js';
 import { HarnessDiagnosticEngine } from '../infra/telemetry/harness-diagnostic-engine.js';
 import { HarnessAutoTuner } from '../infra/telemetry/harness-auto-tuner.js';
+import type { Logger } from '../core/interfaces/logger.js';
+import { ConsoleLogger } from '../infra/logging/console-logger.js';
 
 export interface DefaultAgentRuntimeOptions {
   readonly router: ModelRouter;
   readonly compiler: ContextCompiler;
+  readonly logger?: Logger;
   readonly policyEngine?: PolicyEngine;
   readonly toolExecutor?: ToolExecutor;
   readonly verificationEngine?: VerificationEngine;
@@ -97,6 +100,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
   private readonly experienceStore?: ExperienceStore;
   private readonly idFactory: IdFactory;
   private readonly clock: Clock;
+  private readonly logger: Logger;
 
   private readonly globalObserverHub = new AgentObserverHub();
   private readonly activeExecutions = new Map<ExecutionId, ActiveExecution>();
@@ -104,6 +108,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
   constructor(options: DefaultAgentRuntimeOptions) {
     this.router = options.router;
     this.compiler = options.compiler;
+    this.logger = options.logger ?? new ConsoleLogger();
     this.policyEngine = options.policyEngine;
     this.toolExecutor = options.toolExecutor;
     this.verificationEngine = options.verificationEngine;
@@ -215,10 +220,9 @@ export class DefaultAgentRuntime implements AgentRuntime {
 
       if (extractor) {
         try {
-          const extracted = await extractor.extractFromExecution(result, task.description, goal.description);
-          // console.log('Extracted skill record:', extracted);
-        } catch (err) {
-          console.error('Skill extraction error:', err);
+          await extractor.extractFromExecution(result, task.description, goal.description);
+        } catch (err: any) {
+          this.logger.error(`Skill extraction error: ${err?.message ?? String(err)}`);
         }
       }
 
@@ -430,7 +434,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? (err.stack ?? err.message) : String(err);
-        console.error('RunLoop caught error:', errorMessage);
+        this.logger.error(`RunLoop caught error: ${errorMessage}`);
         observerHub.emit({
           type: AgentEventType.AgentFailed,
           executionId,

@@ -36,6 +36,9 @@ import { TransportRegistry } from '../infra/mcp/transport-registry.js';
 import { SqliteStore } from '../infra/storage/sqlite-store.js';
 import { SqliteMetricsSink as MetricsSink } from '../infra/storage/metrics-sink.js';
 import { InMemoryMemoryStore } from '../infra/memory/in-memory-memory-store.js';
+import { AnthropicModelProvider } from '../infra/model/anthropic-provider.js';
+import { GeminiModelProvider } from '../infra/model/gemini-provider.js';
+import { OtlpTelemetryExporter } from '../infra/telemetry/otlp-telemetry-exporter.js';
 
 export {
   FiveStageCompactor,
@@ -50,6 +53,9 @@ export {
   TransportRegistry,
   SqliteStore,
   MetricsSink,
+  AnthropicModelProvider,
+  GeminiModelProvider,
+  OtlpTelemetryExporter,
 };
 
 export class DefaultModule implements ContainerModule {
@@ -130,5 +136,14 @@ export class DefaultModule implements ContainerModule {
 
     container.register(TOKENS.McpTransport, () => new TransportRegistry());
     container.register('mcpTransport', (c) => c.resolve(TOKENS.McpTransport));
+
+    container.register(TOKENS.AnthropicProvider, () => new AnthropicModelProvider());
+    container.register('anthropicProvider', (c) => c.resolve(TOKENS.AnthropicProvider));
+
+    container.register(TOKENS.GeminiProvider, () => new GeminiModelProvider());
+    container.register('geminiProvider', (c) => c.resolve(TOKENS.GeminiProvider));
+
+    container.register(TOKENS.OtlpExporter, () => new OtlpTelemetryExporter());
+    container.register('otlpExporter', (c) => c.resolve(TOKENS.OtlpExporter));
   }
 }

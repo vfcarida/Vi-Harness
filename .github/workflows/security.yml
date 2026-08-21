@@ -1,0 +1,39 @@
+name: Security & Supply Chain Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 0' # Weekly Sunday run
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  audit:
+    name: Dependency Audit & Supply Chain Security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Verify Clean Install
+        run: npm ci
+
+      - name: Run Dependency Audit
+        run: npm audit --audit-level=high
+
+      - name: Validate Type Safety & Compilation
+        run: npm run typecheck
+
+      - name: Run Secret and Security Test Suite
+        run: npx vitest run tests/unit/security/

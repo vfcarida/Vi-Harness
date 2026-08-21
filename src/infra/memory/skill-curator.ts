@@ -8,12 +8,10 @@
  * - Frequently used patterns -> Boosts importance score
  */
 import type { MemoryStore } from '../../core/interfaces/memory-store.js';
-import type { Clock } from '../../core/interfaces/clock.js';
 import { MemoryStatus, MemoryType, type MemoryRecord } from '../../core/model/memory-types.js';
 
 export interface SkillCuratorOptions {
   readonly memoryStore: MemoryStore;
-  readonly clock: Clock;
   readonly staleThresholdIterations?: number; // Default: 30
   readonly archiveThresholdIterations?: number; // Default: 100
 }
@@ -27,13 +25,11 @@ export interface CurationReport {
 
 export class SkillCurator {
   private readonly memoryStore: MemoryStore;
-  private readonly clock: Clock;
   private readonly staleThreshold: number;
   private readonly archiveThreshold: number;
 
   constructor(options: SkillCuratorOptions) {
     this.memoryStore = options.memoryStore;
-    this.clock = options.clock;
     this.staleThreshold = options.staleThresholdIterations ?? 30;
     this.archiveThreshold = options.archiveThresholdIterations ?? 100;
   }

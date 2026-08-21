@@ -84,7 +84,7 @@ export class DefaultDockerEnvironment implements DockerEnvironment {
     }
 
     const start = Date.now();
-    const timeoutMs = (container.task.timeout || 1800) * 1000;
+    const timeoutMs = container.task.timeout ? container.task.timeout * 1000 : this.defaultTimeoutMs;
 
     return new Promise((resolve) => {
       const escapedCmd = cmd.replace(/'/g, "'\\''");
@@ -171,7 +171,7 @@ export class MockDockerEnvironment implements DockerEnvironment {
     }
 
     const start = Date.now();
-    const timeoutMs = (container.task.timeout || 30) * 1000;
+    const timeoutMs = container.task.timeout ? container.task.timeout * 1000 : this.defaultTimeoutMs;
 
     return new Promise((resolve) => {
       // Execute command in mock container temp directory

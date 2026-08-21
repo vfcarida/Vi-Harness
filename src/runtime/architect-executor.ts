@@ -29,7 +29,7 @@ import { TaskCategory } from '../core/model/router-types.js';
 import { AgentPhase } from '../core/model/state.js';
 import type { Goal } from '../core/model/goal.js';
 import type { Task } from '../core/model/task.js';
-import type { ExecutionId, TaskId } from '../core/types/identifiers.js';
+import type { ExecutionId } from '../core/types/identifiers.js';
 import type { AgentObserverHub } from './agent-observer.js';
 import { AgentEventType } from '../core/model/runtime-types.js';
 import { executeResiliently } from '../infra/model/provider-resilience.js';

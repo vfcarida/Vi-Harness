@@ -98,13 +98,11 @@ export interface ExperienceStoreOptions {
 export class DefaultExperienceStore implements ExperienceStore {
   public readonly baseDir: string;
   private readonly clock: Clock;
-  private readonly idFactory?: IdFactory;
 
   constructor(options?: ExperienceStoreOptions) {
     this.baseDir =
       options?.baseDir ?? path.join(os.homedir(), '.vi-harness', 'experience');
     this.clock = options?.clock ?? new SystemClock();
-    this.idFactory = options?.idFactory;
 
     if (!fs.existsSync(this.baseDir)) {
       fs.mkdirSync(this.baseDir, { recursive: true });

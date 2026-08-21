@@ -178,9 +178,6 @@ export class ProfileLoader {
     const lines = content.split(/\r?\n/);
     const result: Record<string, any> = {};
 
-    let currentKey = '';
-    let currentList: any[] | null = null;
-    let currentObject: Record<string, any> | null = null;
     let currentPatch: Record<string, any> | null = null;
     let inPatches = false;
     let inEnv = false;
@@ -208,7 +205,6 @@ export class ProfileLoader {
         if (colonIdx > 0) {
           const key = trimmed.substring(0, colonIdx).trim();
           const val = trimmed.substring(colonIdx + 1).trim();
-          currentKey = key;
 
           if (key === 'bundles') {
             inBundles = true;
